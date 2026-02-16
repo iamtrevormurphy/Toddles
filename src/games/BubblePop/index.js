@@ -118,10 +118,12 @@ const Bubble = React.memo(({ bubble, onPop }) => {
 });
 
 // Color counter display
-const ColorCounter = ({ colorCounts }) => {
-  const sortedColors = Object.entries(colorCounts)
-    .filter(([_, count]) => count > 0)
-    .sort((a, b) => b[1] - a[1]);
+const ColorCounter = React.memo(({ colorCounts }) => {
+  const sortedColors = React.useMemo(() => {
+    return Object.entries(colorCounts)
+      .filter(([_, count]) => count > 0)
+      .sort((a, b) => b[1] - a[1]);
+  }, [colorCounts]);
 
   if (sortedColors.length === 0) return null;
 
@@ -135,7 +137,7 @@ const ColorCounter = ({ colorCounts }) => {
       ))}
     </View>
   );
-};
+});
 
 // Celebration component
 const Celebration = ({ visible, count }) => {
@@ -176,13 +178,14 @@ const Celebration = ({ visible, count }) => {
 };
 
 export default function BubblePop({ navigation }) {
-  const [bubbles, setBubbles] = useState([]);
-  const [popCount, setPopCount] = useState(0);
-  const [colorCounts, setColorCounts] = useState({});
-  const [showCelebration, setShowCelebration] = useState(false);
-  const bubbleIdRef = useRef(0);
+  const bubblesRef = useRef([]);
 
-  // Initialize audio on mount
+  // Sync bubbles state with ref for the interval to check
+  useEffect(() => {
+    bubblesRef.current = bubbles;
+  }, [bubbles]);
+
+  // Initial audio
   useEffect(() => {
     initAudio();
   }, []);
@@ -190,7 +193,8 @@ export default function BubblePop({ navigation }) {
   // Spawn bubbles periodically
   useEffect(() => {
     const spawnBubble = () => {
-      if (bubbles.length < GAME.maxBubbles) {
+      // Use ref to check current length
+      if (bubblesRef.current.length < GAME.maxBubbles) {
         const newBubble = createBubble(bubbleIdRef.current++);
         setBubbles((prev) => [...prev, newBubble]);
 
@@ -204,6 +208,7 @@ export default function BubblePop({ navigation }) {
       }
     };
 
+    // Initial spawn
     for (let i = 0; i < 5; i++) {
       setTimeout(() => spawnBubble(), i * 300);
     }
