@@ -16,10 +16,10 @@ const { width, height } = Dimensions.get('window');
 
 // Game constants
 const NUMBER_SIZE = 90;
-const FALL_DURATION = 6000; // Slower than bubbles - more thinking time
+const FALL_DURATION = 6000;
 const SPAWN_INTERVAL = 1500;
 const MAX_NUMBERS = 6;
-const BASKET_Y = height - 280;
+const BASKET_Y = height - 320;
 
 // Colors for number bubbles
 const NUMBER_COLORS = ['#FF6B9D', '#4ECDC4', '#FFE66D', '#7ED957', '#A28BFE', '#FF9F43'];
@@ -52,7 +52,6 @@ const FallingNumber = React.memo(({ item, onCatch }) => {
     onCatch(item);
   };
 
-  // Wobble animation
   useEffect(() => {
     const wobble = Animated.loop(
       Animated.sequence([
@@ -104,6 +103,60 @@ const FallingNumber = React.memo(({ item, onCatch }) => {
   );
 });
 
+// Nice basket component with woven look
+const Basket = ({ currentCount, targetCount }) => {
+  const progress = currentCount / targetCount;
+
+  return (
+    <View style={styles.basketWrapper}>
+      {/* Basket rim */}
+      <View style={styles.basketRim}>
+        <View style={styles.rimHighlight} />
+      </View>
+
+      {/* Basket body */}
+      <View style={styles.basketBody}>
+        {/* Woven pattern lines */}
+        <View style={styles.wovenPattern}>
+          {[...Array(5)].map((_, i) => (
+            <View key={`h-${i}`} style={[styles.wovenLineH, { top: 8 + i * 14 }]} />
+          ))}
+          {[...Array(8)].map((_, i) => (
+            <View key={`v-${i}`} style={[styles.wovenLineV, { left: 12 + i * 18 }]} />
+          ))}
+        </View>
+
+        {/* Progress fill */}
+        <View style={styles.progressContainer}>
+          <View
+            style={[
+              styles.progressFill,
+              { height: `${Math.min(progress * 100, 100)}%` }
+            ]}
+          />
+        </View>
+
+        {/* Count display */}
+        <View style={styles.countDisplay}>
+          <Text style={styles.currentCount}>{currentCount}</Text>
+          <Text style={styles.countDivider}>/</Text>
+          <Text style={styles.targetCount}>{targetCount}</Text>
+        </View>
+
+        {/* Collected dots visualization */}
+        <View style={styles.collectedDots}>
+          {[...Array(currentCount)].map((_, i) => (
+            <View key={i} style={styles.collectedDot} />
+          ))}
+        </View>
+      </View>
+
+      {/* Basket shadow */}
+      <View style={styles.basketShadow} />
+    </View>
+  );
+};
+
 // Bear character component
 const BearCharacter = ({ mood, basketCount, target }) => {
   const bounceAnim = useRef(new Animated.Value(0)).current;
@@ -113,7 +166,7 @@ const BearCharacter = ({ mood, basketCount, target }) => {
       Animated.loop(
         Animated.sequence([
           Animated.timing(bounceAnim, {
-            toValue: -20,
+            toValue: -15,
             duration: 150,
             useNativeDriver: true,
           }),
@@ -145,39 +198,27 @@ const BearCharacter = ({ mood, basketCount, target }) => {
     <Animated.View
       style={[styles.bearContainer, { transform: [{ translateY: bounceAnim }] }]}
     >
-      <Text style={styles.bearFace}>{getBearFace()}</Text>
-      {/* Basket */}
-      <View style={styles.basket}>
-        <View style={styles.basketInner}>
-          {/* Show collected dots in basket */}
-          <View style={styles.basketDots}>
-            {Array.from({ length: basketCount }).map((_, i) => (
-              <View key={i} style={styles.basketDot} />
-            ))}
-          </View>
-        </View>
-        <Text style={styles.basketCount}>{basketCount}</Text>
-      </View>
-    </Animated.View>
-  );
-};
+      {/* Bear holding basket */}
+      <View style={styles.bearRow}>
+        {/* Left paw */}
+        <Text style={styles.paw}>🐾</Text>
 
-// Target display component
-const TargetDisplay = ({ target, current }) => {
-  return (
-    <View style={styles.targetContainer}>
-      <Text style={styles.targetLabel}>Catch</Text>
-      <View style={styles.targetNumber}>
-        <Text style={styles.targetValue}>{target}</Text>
-        <DotsDisplay count={target} size={10} color={COLORS.bubblePurple} />
+        {/* Basket */}
+        <Basket currentCount={basketCount} targetCount={target} />
+
+        {/* Right paw */}
+        <Text style={styles.paw}>🐾</Text>
       </View>
-    </View>
+
+      {/* Bear face below basket */}
+      <Text style={styles.bearFace}>{getBearFace()}</Text>
+    </Animated.View>
   );
 };
 
 // Create a falling number
 const createNumber = (id) => {
-  const value = Math.floor(Math.random() * 3) + 1; // 1, 2, or 3
+  const value = Math.floor(Math.random() * 3) + 1;
   return {
     id,
     value,
@@ -190,7 +231,6 @@ const createNumber = (id) => {
   };
 };
 
-// Generate a target that's achievable
 const generateTarget = () => {
   return Math.floor(Math.random() * 4) + 3; // 3-6
 };
@@ -207,26 +247,22 @@ export default function NumberCatch({ navigation }) {
   const celebrationScale = useRef(new Animated.Value(0)).current;
   const oopsScale = useRef(new Animated.Value(0)).current;
 
-  // Spawn numbers
   useEffect(() => {
     const spawnNumber = () => {
       if (numbers.length < MAX_NUMBERS && !showCelebration && !showOops) {
         const newNumber = createNumber(numberIdRef.current++);
         setNumbers((prev) => [...prev, newNumber]);
 
-        // Animate falling
         Animated.timing(newNumber.animatedY, {
           toValue: BASKET_Y,
           duration: FALL_DURATION,
           useNativeDriver: true,
         }).start(() => {
-          // Remove when reaches bottom
           setNumbers((prev) => prev.filter((n) => n.id !== newNumber.id));
         });
       }
     };
 
-    // Initial numbers
     setTimeout(() => spawnNumber(), 500);
     setTimeout(() => spawnNumber(), 1200);
 
@@ -234,7 +270,6 @@ export default function NumberCatch({ navigation }) {
     return () => clearInterval(interval);
   }, [showCelebration, showOops]);
 
-  // Update mood based on progress
   useEffect(() => {
     if (!showCelebration && !showOops) {
       if (basketCount > 0 && target - basketCount <= 2) {
@@ -245,10 +280,8 @@ export default function NumberCatch({ navigation }) {
     }
   }, [basketCount, target, showCelebration, showOops]);
 
-  // Handle catching a number
   const handleCatch = useCallback(
     (item) => {
-      // Animate catch
       Animated.parallel([
         Animated.timing(item.animatedScale, {
           toValue: 0,
@@ -270,7 +303,6 @@ export default function NumberCatch({ navigation }) {
       const newCount = basketCount + item.value;
 
       if (newCount === target) {
-        // Perfect! Celebrate!
         setBasketCount(newCount);
         setMood('celebrate');
         setShowCelebration(true);
@@ -299,7 +331,6 @@ export default function NumberCatch({ navigation }) {
           setNumbers([]);
         });
       } else if (newCount > target) {
-        // Oops, too many!
         setBasketCount(newCount);
         setMood('oops');
         setShowOops(true);
@@ -325,7 +356,6 @@ export default function NumberCatch({ navigation }) {
           setNumbers([]);
         });
       } else {
-        // Keep going
         setBasketCount(newCount);
       }
     },
@@ -348,8 +378,10 @@ export default function NumberCatch({ navigation }) {
         <Text style={styles.scoreLabel}>rounds!</Text>
       </View>
 
-      {/* Target */}
-      <TargetDisplay target={target} current={basketCount} />
+      {/* Instruction hint */}
+      <View style={styles.hintContainer}>
+        <Text style={styles.hintText}>Tap numbers to fill the basket!</Text>
+      </View>
 
       {/* Falling numbers */}
       {numbers.map((num) => (
@@ -392,7 +424,7 @@ export default function NumberCatch({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#E8F5E9', // Soft green forest-y background
+    backgroundColor: '#E8F5E9',
   },
   backButton: {
     position: 'absolute',
@@ -431,30 +463,18 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: COLORS.textLight,
   },
-  targetContainer: {
+  hintContainer: {
+    position: 'absolute',
+    top: 50,
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    marginTop: 120,
+    zIndex: 50,
   },
-  targetLabel: {
-    fontSize: 28,
-    color: COLORS.textDark,
-  },
-  targetNumber: {
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
-    padding: 20,
-    alignItems: 'center',
-    marginTop: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  targetValue: {
-    fontSize: 64,
-    fontWeight: 'bold',
-    color: COLORS.bubblePurple,
+  hintText: {
+    fontSize: 20,
+    color: COLORS.textLight,
+    fontWeight: '500',
   },
   numberContainer: {
     position: 'absolute',
@@ -491,61 +511,152 @@ const styles = StyleSheet.create({
   dot: {
     margin: 2,
   },
+  // Bear styles
   bearContainer: {
     position: 'absolute',
-    bottom: 40,
+    bottom: 30,
     left: 0,
     right: 0,
     alignItems: 'center',
   },
-  bearFace: {
-    fontSize: 80,
-  },
-  basket: {
-    marginTop: -10,
-    alignItems: 'center',
-  },
-  basketInner: {
-    width: 120,
-    height: 70,
-    backgroundColor: '#8B4513',
-    borderRadius: 10,
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 4,
-    borderColor: '#654321',
-    borderTopWidth: 0,
-  },
-  basketDots: {
+  bearRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'flex-end',
     justifyContent: 'center',
-    padding: 8,
-    maxWidth: 100,
   },
-  basketDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#FFE66D',
-    margin: 3,
-    borderWidth: 2,
-    borderColor: '#FFA500',
+  paw: {
+    fontSize: 36,
+    marginHorizontal: -5,
+    marginBottom: 20,
   },
-  basketCount: {
-    fontSize: 24,
+  bearFace: {
+    fontSize: 70,
+    marginTop: -15,
+  },
+  // Basket styles
+  basketWrapper: {
+    alignItems: 'center',
+  },
+  basketRim: {
+    width: 160,
+    height: 20,
+    backgroundColor: '#D2691E',
+    borderRadius: 10,
+    borderWidth: 3,
+    borderColor: '#8B4513',
+    overflow: 'hidden',
+    zIndex: 2,
+  },
+  rimHighlight: {
+    position: 'absolute',
+    top: 2,
+    left: 10,
+    right: 10,
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 3,
+  },
+  basketBody: {
+    width: 150,
+    height: 100,
+    backgroundColor: '#DEB887',
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    borderWidth: 4,
+    borderTopWidth: 0,
+    borderColor: '#CD853F',
+    marginTop: -4,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  wovenPattern: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  wovenLineH: {
+    position: 'absolute',
+    left: 8,
+    right: 8,
+    height: 3,
+    backgroundColor: '#C4A574',
+    borderRadius: 1,
+  },
+  wovenLineV: {
+    position: 'absolute',
+    top: 4,
+    bottom: 8,
+    width: 3,
+    backgroundColor: '#B8956E',
+    borderRadius: 1,
+  },
+  progressContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    top: 0,
+    justifyContent: 'flex-end',
+  },
+  progressFill: {
+    backgroundColor: 'rgba(126, 217, 87, 0.4)',
+    borderBottomLeftRadius: 26,
+    borderBottomRightRadius: 26,
+  },
+  countDisplay: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    zIndex: 10,
+  },
+  currentCount: {
+    fontSize: 48,
     fontWeight: 'bold',
-    color: COLORS.white,
-    marginTop: 8,
-    textShadowColor: 'rgba(0,0,0,0.3)',
+    color: '#5D4037',
+    textShadowColor: 'rgba(255,255,255,0.5)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
+  countDivider: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#8D6E63',
+    marginHorizontal: 4,
+  },
+  targetCount: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: '#8D6E63',
+  },
+  collectedDots: {
+    position: 'absolute',
+    bottom: 8,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    maxWidth: 120,
+  },
+  collectedDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#FFD700',
+    margin: 2,
+    borderWidth: 2,
+    borderColor: '#FFA500',
+  },
+  basketShadow: {
+    width: 130,
+    height: 15,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    borderRadius: 65,
+    marginTop: 5,
+  },
   overlay: {
     position: 'absolute',
-    top: '35%',
+    top: '30%',
     left: 0,
     right: 0,
     alignItems: 'center',
