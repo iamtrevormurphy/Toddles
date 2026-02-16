@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,7 +7,6 @@ import {
   Animated,
   Text,
   SafeAreaView,
-  PanResponder,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { COLORS, TOUCH } from '../../constants/theme';
@@ -15,119 +14,62 @@ import { playPopSound, playCelebrationSound } from '../../utils/sound';
 
 const { width, height } = Dimensions.get('window');
 
+// Game constants
+const CONVEYOR_Y = 200;
+const SHAPE_SIZE = 70;
+const BIN_SIZE = 100;
+const BIN_Y = height - 280;
+const CONVEYOR_SPEED = 4000; // Time to cross screen
+const SPAWN_INTERVAL = 2000;
+const CATCH_ZONE_WIDTH = 100; // How close shape needs to be to bin
+
 // Shape definitions
 const SHAPES = [
-  { type: 'circle', color: COLORS.bubblePink, emoji: '⭕' },
-  { type: 'square', color: COLORS.bubbleBlue, emoji: '🟦' },
-  { type: 'triangle', color: COLORS.bubbleYellow, emoji: '🔺' },
-  { type: 'star', color: COLORS.bubblePurple, emoji: '⭐' },
+  { type: 'circle', color: '#FF6B9D', label: 'Circle' },
+  { type: 'square', color: '#4ECDC4', label: 'Square' },
+  { type: 'triangle', color: '#FFE66D', label: 'Triangle' },
 ];
 
-const SHAPE_SIZE = 80;
-const HOLE_SIZE = 100;
+// Calculate bin positions (evenly spaced)
+const BIN_POSITIONS = SHAPES.map((_, index) => {
+  const totalWidth = SHAPES.length * BIN_SIZE + (SHAPES.length - 1) * 20;
+  const startX = (width - totalWidth) / 2;
+  return startX + index * (BIN_SIZE + 20) + BIN_SIZE / 2;
+});
 
-// Generate random shape pieces
-const generatePieces = () => {
-  const shuffled = [...SHAPES].sort(() => Math.random() - 0.5);
-  return shuffled.map((shape, index) => ({
-    ...shape,
-    id: index,
-    startX: 40 + (index % 2) * (width / 2 - 60),
-    startY: height - 280 + Math.floor(index / 2) * 120,
-  }));
-};
-
-// Generate hole positions
-const generateHoles = () => {
-  const shuffled = [...SHAPES].sort(() => Math.random() - 0.5);
-  return shuffled.map((shape, index) => ({
-    ...shape,
-    id: index,
-    x: 40 + (index % 2) * (width / 2 - 60),
-    y: 140 + Math.floor(index / 2) * 130,
-  }));
-};
-
-// Shape component (draggable)
-const DraggableShape = ({ shape, onDrop, holes, disabled }) => {
-  const pan = useRef(new Animated.ValueXY({ x: shape.startX, y: shape.startY })).current;
-  const scale = useRef(new Animated.Value(1)).current;
-  const [dragging, setDragging] = useState(false);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => !disabled,
-      onMoveShouldSetPanResponder: () => !disabled,
-      onPanResponderGrant: () => {
-        setDragging(true);
-        Animated.spring(scale, {
-          toValue: 1.2,
-          useNativeDriver: true,
-        }).start();
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      },
-      onPanResponderMove: Animated.event([null, { moveX: pan.x, moveY: pan.y }], {
-        useNativeDriver: false,
-      }),
-      onPanResponderRelease: (_, gesture) => {
-        setDragging(false);
-        Animated.spring(scale, {
-          toValue: 1,
-          useNativeDriver: true,
-        }).start();
-
-        // Check if dropped on matching hole
-        const matchingHole = holes.find((hole) => hole.type === shape.type);
-        if (matchingHole) {
-          const distance = Math.sqrt(
-            Math.pow(gesture.moveX - (matchingHole.x + HOLE_SIZE / 2), 2) +
-            Math.pow(gesture.moveY - (matchingHole.y + HOLE_SIZE / 2), 2)
-          );
-
-          if (distance < HOLE_SIZE) {
-            // Snap to hole
-            Animated.spring(pan, {
-              toValue: { x: matchingHole.x + 10, y: matchingHole.y + 10 },
-              useNativeDriver: false,
-            }).start();
-            onDrop(shape);
-            return;
-          }
-        }
-
-        // Return to start position
-        Animated.spring(pan, {
-          toValue: { x: shape.startX, y: shape.startY },
-          useNativeDriver: false,
-        }).start();
-      },
-    })
-  ).current;
+// Shape component on conveyor
+const ConveyorShape = React.memo(({ shape, onMissed }) => {
+  useEffect(() => {
+    // Start moving animation
+    Animated.timing(shape.animatedX, {
+      toValue: width + SHAPE_SIZE,
+      duration: CONVEYOR_SPEED,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) {
+        onMissed(shape);
+      }
+    });
+  }, []);
 
   const renderShape = () => {
-    const shapeStyle = {
-      width: SHAPE_SIZE,
-      height: SHAPE_SIZE,
-      backgroundColor: shape.color,
-      justifyContent: 'center',
-      alignItems: 'center',
-    };
-
     switch (shape.type) {
       case 'circle':
-        return <View style={[shapeStyle, { borderRadius: SHAPE_SIZE / 2 }]} />;
-      case 'square':
-        return <View style={[shapeStyle, { borderRadius: 8 }]} />;
-      case 'triangle':
         return (
-          <View style={styles.triangleContainer}>
-            <View style={[styles.triangle, { borderBottomColor: shape.color }]} />
+          <View style={[styles.shapeCircle, { backgroundColor: shape.color }]}>
+            <View style={styles.shapeShine} />
           </View>
         );
-      case 'star':
+      case 'square':
         return (
-          <View style={[shapeStyle, { borderRadius: 8, backgroundColor: 'transparent' }]}>
-            <Text style={{ fontSize: 60 }}>⭐</Text>
+          <View style={[styles.shapeSquare, { backgroundColor: shape.color }]}>
+            <View style={styles.shapeShine} />
+          </View>
+        );
+      case 'triangle':
+        return (
+          <View style={styles.triangleWrapper}>
+            <View style={[styles.shapeTriangle, { borderBottomColor: shape.color }]} />
           </View>
         );
       default:
@@ -137,52 +79,59 @@ const DraggableShape = ({ shape, onDrop, holes, disabled }) => {
 
   return (
     <Animated.View
-      {...panResponder.panHandlers}
       style={[
-        styles.draggableShape,
+        styles.conveyorShape,
         {
-          left: pan.x,
-          top: pan.y,
-          transform: [{ scale }],
-          zIndex: dragging ? 100 : 1,
+          transform: [
+            { translateX: shape.animatedX },
+            { scale: shape.animatedScale },
+          ],
+          opacity: shape.animatedOpacity,
         },
       ]}
     >
       {renderShape()}
     </Animated.View>
   );
-};
+});
 
-// Hole component
-const ShapeHole = ({ hole, filled }) => {
-  const renderHoleShape = () => {
-    const holeStyle = {
-      width: HOLE_SIZE - 20,
-      height: HOLE_SIZE - 20,
-      borderWidth: 4,
-      borderStyle: 'dashed',
-      borderColor: filled ? COLORS.success : hole.color,
-      backgroundColor: filled ? `${COLORS.success}30` : 'transparent',
-      justifyContent: 'center',
-      alignItems: 'center',
-    };
+// Bin component
+const ShapeBin = ({ shape, onPress, isActive, justCaught, justMissed }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
-    switch (hole.type) {
+  useEffect(() => {
+    if (justCaught) {
+      Animated.sequence([
+        Animated.timing(scaleAnim, { toValue: 1.2, duration: 100, useNativeDriver: true }),
+        Animated.timing(scaleAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [justCaught]);
+
+  useEffect(() => {
+    if (justMissed) {
+      Animated.sequence([
+        Animated.timing(scaleAnim, { toValue: 0.9, duration: 50, useNativeDriver: true }),
+        Animated.timing(scaleAnim, { toValue: 1.1, duration: 50, useNativeDriver: true }),
+        Animated.timing(scaleAnim, { toValue: 1, duration: 50, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [justMissed]);
+
+  const renderBinShape = () => {
+    const opacity = 0.4;
+    switch (shape.type) {
       case 'circle':
-        return <View style={[holeStyle, { borderRadius: (HOLE_SIZE - 20) / 2 }]} />;
+        return (
+          <View style={[styles.binShapeCircle, { backgroundColor: shape.color, opacity }]} />
+        );
       case 'square':
-        return <View style={[holeStyle, { borderRadius: 8 }]} />;
+        return (
+          <View style={[styles.binShapeSquare, { backgroundColor: shape.color, opacity }]} />
+        );
       case 'triangle':
         return (
-          <View style={styles.triangleHoleContainer}>
-            <View style={[styles.triangleHole, { borderBottomColor: filled ? COLORS.success : hole.color }]} />
-          </View>
-        );
-      case 'star':
-        return (
-          <View style={[holeStyle, { borderRadius: 8, borderColor: 'transparent' }]}>
-            <Text style={{ fontSize: 50, opacity: filled ? 1 : 0.3 }}>⭐</Text>
-          </View>
+          <View style={[styles.binTriangle, { borderBottomColor: shape.color, opacity }]} />
         );
       default:
         return null;
@@ -190,64 +139,215 @@ const ShapeHole = ({ hole, filled }) => {
   };
 
   return (
-    <View style={[styles.hole, { left: hole.x, top: hole.y }]}>
-      {renderHoleShape()}
+    <TouchableOpacity onPress={onPress} activeOpacity={0.8}>
+      <Animated.View
+        style={[
+          styles.bin,
+          isActive && styles.binActive,
+          justCaught && styles.binSuccess,
+          justMissed && styles.binError,
+          { transform: [{ scale: scaleAnim }] },
+        ]}
+      >
+        {renderBinShape()}
+        <Text style={styles.binLabel}>{shape.label}</Text>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+};
+
+// Conveyor belt component
+const ConveyorBelt = () => {
+  const scrollAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const animate = () => {
+      scrollAnim.setValue(0);
+      Animated.timing(scrollAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }).start(() => animate());
+    };
+    animate();
+  }, []);
+
+  const translateX = scrollAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 40],
+  });
+
+  return (
+    <View style={styles.conveyorContainer}>
+      {/* Belt surface */}
+      <View style={styles.conveyorBelt}>
+        <Animated.View style={[styles.conveyorPattern, { transform: [{ translateX }] }]}>
+          {[...Array(20)].map((_, i) => (
+            <View key={i} style={styles.conveyorStripe} />
+          ))}
+        </Animated.View>
+      </View>
+      {/* Belt edges */}
+      <View style={styles.conveyorEdgeTop} />
+      <View style={styles.conveyorEdgeBottom} />
+      {/* Rollers */}
+      <View style={[styles.conveyorRoller, { left: 20 }]} />
+      <View style={[styles.conveyorRoller, { right: 20 }]} />
     </View>
   );
 };
 
+// Create a shape for the conveyor
+const createShape = (id) => {
+  const shapeType = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+  return {
+    id,
+    type: shapeType.type,
+    color: shapeType.color,
+    animatedX: new Animated.Value(-SHAPE_SIZE),
+    animatedScale: new Animated.Value(1),
+    animatedOpacity: new Animated.Value(1),
+  };
+};
+
 export default function ShapeSorter({ navigation }) {
-  const [pieces, setPieces] = useState([]);
-  const [holes, setHoles] = useState([]);
-  const [matched, setMatched] = useState([]);
+  const [shapes, setShapes] = useState([]);
   const [score, setScore] = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [activeBin, setActiveBin] = useState(null);
+  const [caughtBin, setCaughtBin] = useState(null);
+  const [missedBin, setMissedBin] = useState(null);
   const [showCelebration, setShowCelebration] = useState(false);
+  const shapeIdRef = useRef(0);
   const celebrationScale = useRef(new Animated.Value(0)).current;
 
-  // Initialize game
+  // Spawn shapes on conveyor
   useEffect(() => {
-    resetGame();
+    const spawnShape = () => {
+      const newShape = createShape(shapeIdRef.current++);
+      setShapes((prev) => [...prev, newShape]);
+    };
+
+    // Initial shape
+    setTimeout(spawnShape, 500);
+
+    const interval = setInterval(spawnShape, SPAWN_INTERVAL);
+    return () => clearInterval(interval);
   }, []);
 
-  const resetGame = () => {
-    setPieces(generatePieces());
-    setHoles(generateHoles());
-    setMatched([]);
-  };
+  // Handle shape falling off conveyor (missed)
+  const handleMissed = useCallback((shape) => {
+    setShapes((prev) => prev.filter((s) => s.id !== shape.id));
+    setStreak(0);
+  }, []);
 
-  const handleDrop = (shape) => {
-    playPopSound();
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  // Handle bin tap
+  const handleBinPress = useCallback((binType, binIndex) => {
+    // Find shapes currently over this bin
+    const binX = BIN_POSITIONS[binIndex];
 
-    setMatched((prev) => [...prev, shape.type]);
-    setScore((prev) => prev + 1);
+    // Check each shape's current position
+    let caught = false;
+    setShapes((prev) => {
+      const newShapes = [...prev];
+      for (let i = 0; i < newShapes.length; i++) {
+        const shape = newShapes[i];
+        // Get current animated value
+        let currentX = -SHAPE_SIZE;
+        shape.animatedX.stopAnimation((value) => {
+          currentX = value;
+        });
 
-    // Check if all matched
-    if (matched.length + 1 === SHAPES.length) {
-      // All shapes matched - celebrate!
-      setShowCelebration(true);
-      playCelebrationSound();
+        const shapeCenter = currentX + SHAPE_SIZE / 2;
+        const distance = Math.abs(shapeCenter - binX);
 
-      Animated.sequence([
-        Animated.spring(celebrationScale, {
-          toValue: 1,
-          friction: 3,
-          tension: 100,
-          useNativeDriver: true,
-        }),
-        Animated.delay(1500),
-        Animated.timing(celebrationScale, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        setShowCelebration(false);
-        // Start new round after brief delay
-        setTimeout(resetGame, 500);
+        if (distance < CATCH_ZONE_WIDTH) {
+          if (shape.type === binType) {
+            // Correct match!
+            caught = true;
+            playPopSound();
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+            // Animate shape into bin
+            Animated.parallel([
+              Animated.timing(shape.animatedScale, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: true,
+              }),
+              Animated.timing(shape.animatedOpacity, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: true,
+              }),
+            ]).start(() => {
+              setShapes((current) => current.filter((s) => s.id !== shape.id));
+            });
+
+            setScore((prev) => prev + 1);
+            setStreak((prev) => {
+              const newStreak = prev + 1;
+              if (newStreak > 0 && newStreak % 5 === 0) {
+                // Celebrate every 5 streak
+                setShowCelebration(true);
+                playCelebrationSound();
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                Animated.sequence([
+                  Animated.spring(celebrationScale, {
+                    toValue: 1,
+                    friction: 3,
+                    tension: 100,
+                    useNativeDriver: true,
+                  }),
+                  Animated.delay(1000),
+                  Animated.timing(celebrationScale, {
+                    toValue: 0,
+                    duration: 300,
+                    useNativeDriver: true,
+                  }),
+                ]).start(() => setShowCelebration(false));
+              }
+              return newStreak;
+            });
+            setCaughtBin(binIndex);
+            setTimeout(() => setCaughtBin(null), 200);
+            break;
+          } else {
+            // Wrong bin!
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            setStreak(0);
+            setMissedBin(binIndex);
+            setTimeout(() => setMissedBin(null), 200);
+            break;
+          }
+        }
+      }
+      return newShapes;
+    });
+  }, []);
+
+  // Update active bin based on shape positions
+  useEffect(() => {
+    const checkInterval = setInterval(() => {
+      let foundActive = null;
+      shapes.forEach((shape) => {
+        let currentX = -SHAPE_SIZE;
+        shape.animatedX.stopAnimation((value) => {
+          currentX = value;
+        });
+        const shapeCenter = currentX + SHAPE_SIZE / 2;
+
+        BIN_POSITIONS.forEach((binX, index) => {
+          if (Math.abs(shapeCenter - binX) < CATCH_ZONE_WIDTH) {
+            foundActive = index;
+          }
+        });
       });
-    }
-  };
+      setActiveBin(foundActive);
+    }, 50);
+
+    return () => clearInterval(checkInterval);
+  }, [shapes]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -262,30 +362,53 @@ export default function ShapeSorter({ navigation }) {
       {/* Score */}
       <View style={styles.scoreContainer}>
         <Text style={styles.scoreText}>{score}</Text>
-        <Text style={styles.scoreLabel}>matched!</Text>
+        <Text style={styles.scoreLabel}>sorted!</Text>
       </View>
 
-      {/* Holes */}
-      {holes.map((hole) => (
-        <ShapeHole
-          key={`hole-${hole.id}`}
-          hole={hole}
-          filled={matched.includes(hole.type)}
-        />
-      ))}
+      {/* Streak indicator */}
+      {streak > 0 && (
+        <View style={styles.streakContainer}>
+          <Text style={styles.streakText}>🔥 {streak}</Text>
+        </View>
+      )}
 
-      {/* Draggable pieces */}
-      {pieces.map((piece) => (
-        !matched.includes(piece.type) && (
-          <DraggableShape
-            key={`piece-${piece.id}`}
-            shape={piece}
-            holes={holes}
-            onDrop={handleDrop}
-            disabled={matched.includes(piece.type)}
+      {/* Instructions */}
+      <View style={styles.instructionContainer}>
+        <Text style={styles.instructionText}>Tap the matching bin!</Text>
+      </View>
+
+      {/* Conveyor belt */}
+      <View style={styles.conveyorArea}>
+        <ConveyorBelt />
+        {/* Shapes on conveyor */}
+        {shapes.map((shape) => (
+          <ConveyorShape
+            key={shape.id}
+            shape={shape}
+            onMissed={handleMissed}
           />
-        )
-      ))}
+        ))}
+      </View>
+
+      {/* Chute/slide from conveyor to bins */}
+      <View style={styles.chute} />
+
+      {/* Bins */}
+      <View style={styles.binsContainer}>
+        {SHAPES.map((shape, index) => (
+          <ShapeBin
+            key={shape.type}
+            shape={shape}
+            onPress={() => handleBinPress(shape.type, index)}
+            isActive={activeBin === index}
+            justCaught={caughtBin === index}
+            justMissed={missedBin === index}
+          />
+        ))}
+      </View>
+
+      {/* Factory floor */}
+      <View style={styles.factoryFloor} />
 
       {/* Celebration */}
       {showCelebration && (
@@ -295,8 +418,8 @@ export default function ShapeSorter({ navigation }) {
             { transform: [{ scale: celebrationScale }] },
           ]}
         >
-          <Text style={styles.celebrationEmoji}>🎉</Text>
-          <Text style={styles.celebrationText}>Great job!</Text>
+          <Text style={styles.celebrationEmoji}>⭐</Text>
+          <Text style={styles.celebrationText}>{streak} in a row!</Text>
         </Animated.View>
       )}
     </SafeAreaView>
@@ -306,7 +429,7 @@ export default function ShapeSorter({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundLight,
+    backgroundColor: '#2C3E50',
   },
   backButton: {
     position: 'absolute',
@@ -321,7 +444,7 @@ const styles = StyleSheet.create({
     zIndex: 100,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 3,
   },
@@ -339,75 +462,254 @@ const styles = StyleSheet.create({
   scoreText: {
     fontSize: 48,
     fontWeight: 'bold',
-    color: COLORS.textDark,
+    color: COLORS.white,
   },
   scoreLabel: {
     fontSize: 18,
-    color: COLORS.textLight,
+    color: 'rgba(255,255,255,0.7)',
   },
-  hole: {
+  streakContainer: {
     position: 'absolute',
-    width: HOLE_SIZE,
-    height: HOLE_SIZE,
-    justifyContent: 'center',
+    top: 120,
+    right: 20,
+    backgroundColor: 'rgba(255,150,0,0.3)',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    zIndex: 100,
+  },
+  streakText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFB800',
+  },
+  instructionContainer: {
+    position: 'absolute',
+    top: 55,
+    left: 0,
+    right: 0,
     alignItems: 'center',
+    zIndex: 50,
   },
-  draggableShape: {
+  instructionText: {
+    fontSize: 20,
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: '500',
+  },
+  conveyorArea: {
     position: 'absolute',
+    top: CONVEYOR_Y,
+    left: 0,
+    right: 0,
+    height: SHAPE_SIZE + 60,
+  },
+  conveyorContainer: {
+    position: 'absolute',
+    top: SHAPE_SIZE + 10,
+    left: 0,
+    right: 0,
+    height: 50,
+  },
+  conveyorBelt: {
+    position: 'absolute',
+    top: 10,
+    left: 0,
+    right: 0,
+    height: 30,
+    backgroundColor: '#34495E',
+    overflow: 'hidden',
+  },
+  conveyorPattern: {
+    flexDirection: 'row',
+    position: 'absolute',
+    left: -40,
+    top: 0,
+    bottom: 0,
+  },
+  conveyorStripe: {
+    width: 20,
+    height: '100%',
+    backgroundColor: '#3D566E',
+    marginRight: 20,
+  },
+  conveyorEdgeTop: {
+    position: 'absolute',
+    top: 5,
+    left: 0,
+    right: 0,
+    height: 8,
+    backgroundColor: '#5D6D7E',
+    borderRadius: 4,
+  },
+  conveyorEdgeBottom: {
+    position: 'absolute',
+    top: 37,
+    left: 0,
+    right: 0,
+    height: 8,
+    backgroundColor: '#5D6D7E',
+    borderRadius: 4,
+  },
+  conveyorRoller: {
+    position: 'absolute',
+    top: 5,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#7F8C8D',
+    borderWidth: 4,
+    borderColor: '#95A5A6',
+  },
+  conveyorShape: {
+    position: 'absolute',
+    top: 5,
     width: SHAPE_SIZE,
     height: SHAPE_SIZE,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  triangleContainer: {
+  shapeCircle: {
+    width: SHAPE_SIZE - 10,
+    height: SHAPE_SIZE - 10,
+    borderRadius: (SHAPE_SIZE - 10) / 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  shapeSquare: {
+    width: SHAPE_SIZE - 10,
+    height: SHAPE_SIZE - 10,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  triangleWrapper: {
     width: SHAPE_SIZE,
     height: SHAPE_SIZE,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  triangle: {
+  shapeTriangle: {
     width: 0,
     height: 0,
-    borderLeftWidth: SHAPE_SIZE / 2,
-    borderRightWidth: SHAPE_SIZE / 2,
-    borderBottomWidth: SHAPE_SIZE,
+    borderLeftWidth: (SHAPE_SIZE - 10) / 2,
+    borderRightWidth: (SHAPE_SIZE - 10) / 2,
+    borderBottomWidth: SHAPE_SIZE - 10,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
   },
-  triangleHoleContainer: {
-    width: HOLE_SIZE - 20,
-    height: HOLE_SIZE - 20,
+  shapeShine: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    width: 15,
+    height: 15,
+    borderRadius: 7.5,
+    backgroundColor: 'rgba(255,255,255,0.4)',
+  },
+  chute: {
+    position: 'absolute',
+    top: CONVEYOR_Y + SHAPE_SIZE + 50,
+    left: '20%',
+    right: '20%',
+    height: BIN_Y - CONVEYOR_Y - SHAPE_SIZE - 80,
+    backgroundColor: '#3D566E',
+    borderRadius: 10,
+    borderWidth: 4,
+    borderColor: '#5D6D7E',
+  },
+  binsContainer: {
+    position: 'absolute',
+    top: BIN_Y,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 20,
+  },
+  bin: {
+    width: BIN_SIZE,
+    height: BIN_SIZE + 20,
+    backgroundColor: '#465C6E',
+    borderRadius: 15,
+    borderWidth: 4,
+    borderColor: '#5D7A8C',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
   },
-  triangleHole: {
+  binActive: {
+    borderColor: '#F1C40F',
+    borderWidth: 4,
+  },
+  binSuccess: {
+    backgroundColor: 'rgba(46, 204, 113, 0.3)',
+    borderColor: '#2ECC71',
+  },
+  binError: {
+    backgroundColor: 'rgba(231, 76, 60, 0.3)',
+    borderColor: '#E74C3C',
+  },
+  binShapeCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+  },
+  binShapeSquare: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+  },
+  binTriangle: {
     width: 0,
     height: 0,
-    borderLeftWidth: (HOLE_SIZE - 20) / 2,
-    borderRightWidth: (HOLE_SIZE - 20) / 2,
-    borderBottomWidth: HOLE_SIZE - 20,
+    borderLeftWidth: 25,
+    borderRightWidth: 25,
+    borderBottomWidth: 45,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderStyle: 'dashed',
+  },
+  binLabel: {
+    marginTop: 8,
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.8)',
+  },
+  factoryFloor: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 80,
+    backgroundColor: '#1A252F',
   },
   celebration: {
     position: 'absolute',
-    top: 0,
+    top: '35%',
     left: 0,
     right: 0,
-    bottom: 0,
-    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.9)',
     zIndex: 200,
   },
   celebrationEmoji: {
-    fontSize: 100,
+    fontSize: 80,
   },
   celebrationText: {
-    fontSize: 48,
+    fontSize: 36,
     fontWeight: 'bold',
-    color: COLORS.success,
-    marginTop: 20,
+    color: '#F1C40F',
+    marginTop: 10,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 4,
   },
 });
