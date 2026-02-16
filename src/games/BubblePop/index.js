@@ -178,6 +178,11 @@ const Celebration = ({ visible, count }) => {
 };
 
 export default function BubblePop({ navigation }) {
+  const [bubbles, setBubbles] = useState([]);
+  const [popCount, setPopCount] = useState(0);
+  const [colorCounts, setColorCounts] = useState({});
+  const [showCelebration, setShowCelebration] = useState(false);
+  const bubbleIdRef = useRef(0);
   const bubblesRef = useRef([]);
 
   // Sync bubbles state with ref for the interval to check
