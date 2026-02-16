@@ -8,7 +8,7 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#FFF8E7"
     },
@@ -19,14 +19,20 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#FFF8E7"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.toddles.app"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon-32.png",
+      "bundler": "metro",
+      "name": "Toddles",
+      "shortName": "Toddles",
+      "description": "Educational games for toddlers",
+      "backgroundColor": "#FFF8E7",
+      "themeColor": "#4ECDC4"
     },
     "extra": {
       "ageRange": "2-6",
