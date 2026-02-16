@@ -14,18 +14,15 @@ import { playPopSound, playCelebrationSound } from '../../utils/sound';
 
 const { width } = Dimensions.get('window');
 
-// Color definitions with kid-friendly names
+// Color definitions with matching emojis
 const GAME_COLORS = [
-  { name: 'Red', color: '#FF6B6B', emoji: '🔴' },
-  { name: 'Blue', color: '#4ECDC4', emoji: '🔵' },
-  { name: 'Yellow', color: '#FFE66D', emoji: '🟡' },
-  { name: 'Green', color: '#7ED957', emoji: '🟢' },
-  { name: 'Purple', color: '#A28BFE', emoji: '🟣' },
-  { name: 'Orange', color: '#FF9F43', emoji: '🟠' },
+  { name: 'Red', color: '#FF6B6B', emojis: ['🍎', '🍒', '❤️', '🌹', '🍓', '🦀'] },
+  { name: 'Blue', color: '#4ECDC4', emojis: ['🐳', '💎', '🧊', '🫧', '🐬', '💧'] },
+  { name: 'Yellow', color: '#FFE66D', emojis: ['🌟', '🍋', '🌻', '⭐', '🍌', '🌼'] },
+  { name: 'Green', color: '#7ED957', emojis: ['🐸', '🥒', '🍀', '🌿', '🥦', '🌲'] },
+  { name: 'Purple', color: '#A28BFE', emojis: ['🍇', '🔮', '🦄', '👾', '🍆', '💜'] },
+  { name: 'Orange', color: '#FF9F43', emojis: ['🍊', '🥕', '🏀', '🦊', '🧡', '🎃'] },
 ];
-
-// Fun objects to display
-const OBJECTS = ['🍎', '🚗', '🌟', '🎈', '🐸', '🌸', '🏀', '🍌', '🐱', '🌈', '🎁', '🦋'];
 
 const GRID_SIZE = 3;
 const ITEM_SIZE = (width - 80) / GRID_SIZE;
@@ -33,34 +30,40 @@ const ITEM_SIZE = (width - 80) / GRID_SIZE;
 // Generate a round with target color and grid items
 const generateRound = () => {
   const targetColor = GAME_COLORS[Math.floor(Math.random() * GAME_COLORS.length)];
-
-  // Generate grid items - some match, some don't
   const matchCount = 2 + Math.floor(Math.random() * 2); // 2-3 matches
   const items = [];
 
-  // Add matching items
+  // Add matching items with color-matched emojis
+  const usedEmojis = new Set();
   for (let i = 0; i < matchCount; i++) {
+    let emoji;
+    do {
+      emoji = targetColor.emojis[Math.floor(Math.random() * targetColor.emojis.length)];
+    } while (usedEmojis.has(emoji) && usedEmojis.size < targetColor.emojis.length);
+    usedEmojis.add(emoji);
+
     items.push({
       id: i,
       color: targetColor,
-      object: OBJECTS[Math.floor(Math.random() * OBJECTS.length)],
+      emoji: emoji,
       isTarget: true,
     });
   }
 
-  // Fill rest with non-matching colors
+  // Fill rest with non-matching colors (with their matching emojis)
   const otherColors = GAME_COLORS.filter(c => c.name !== targetColor.name);
   for (let i = matchCount; i < GRID_SIZE * GRID_SIZE; i++) {
     const randomColor = otherColors[Math.floor(Math.random() * otherColors.length)];
+    const emoji = randomColor.emojis[Math.floor(Math.random() * randomColor.emojis.length)];
     items.push({
       id: i,
       color: randomColor,
-      object: OBJECTS[Math.floor(Math.random() * OBJECTS.length)],
+      emoji: emoji,
       isTarget: false,
     });
   }
 
-  // Shuffle items
+  // Shuffle items and reassign IDs
   return {
     targetColor,
     items: items.sort(() => Math.random() - 0.5).map((item, index) => ({
@@ -72,16 +75,23 @@ const generateRound = () => {
 };
 
 // Grid item component
-const GridItem = React.memo(({ item, onPress, disabled, found }) => {
+const GridItem = ({ item, onPress, disabled, found, roundKey }) => {
+  // Reset animations when round changes
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const opacityAnim = useRef(new Animated.Value(1)).current;
+
+  // Reset opacity when round changes
+  useEffect(() => {
+    scaleAnim.setValue(1);
+    opacityAnim.setValue(1);
+  }, [roundKey]);
 
   useEffect(() => {
     if (found) {
       Animated.parallel([
         Animated.sequence([
           Animated.timing(scaleAnim, {
-            toValue: 1.2,
+            toValue: 1.15,
             duration: 150,
             useNativeDriver: true,
           }),
@@ -92,7 +102,7 @@ const GridItem = React.memo(({ item, onPress, disabled, found }) => {
           }),
         ]),
         Animated.timing(opacityAnim, {
-          toValue: 0.5,
+          toValue: 0.4,
           duration: 300,
           useNativeDriver: true,
         }),
@@ -122,7 +132,7 @@ const GridItem = React.memo(({ item, onPress, disabled, found }) => {
           },
         ]}
       >
-        <Text style={styles.itemEmoji}>{item.object}</Text>
+        <Text style={styles.itemEmoji}>{item.emoji}</Text>
         {found && (
           <View style={styles.checkmark}>
             <Text style={styles.checkmarkText}>✓</Text>
@@ -131,7 +141,7 @@ const GridItem = React.memo(({ item, onPress, disabled, found }) => {
       </Animated.View>
     </TouchableOpacity>
   );
-});
+};
 
 // Target color indicator
 const TargetIndicator = ({ color, found, total }) => {
@@ -141,17 +151,28 @@ const TargetIndicator = ({ color, found, total }) => {
       <View style={[styles.targetColorBox, { backgroundColor: color.color }]}>
         <Text style={styles.targetColorName}>{color.name}</Text>
       </View>
-      <Text style={styles.targetProgress}>{found} / {total}</Text>
+      <View style={styles.progressDots}>
+        {[...Array(total)].map((_, i) => (
+          <View
+            key={i}
+            style={[
+              styles.progressDot,
+              { backgroundColor: i < found ? color.color : '#DDD' }
+            ]}
+          />
+        ))}
+      </View>
     </View>
   );
 };
 
 export default function ColorMatch({ navigation }) {
   const [round, setRound] = useState(null);
+  const [roundKey, setRoundKey] = useState(0);
   const [foundItems, setFoundItems] = useState([]);
   const [score, setScore] = useState(0);
   const [showCelebration, setShowCelebration] = useState(false);
-  const [wrongPulse, setWrongPulse] = useState(false);
+  const [wrongItem, setWrongItem] = useState(null);
   const celebrationScale = useRef(new Animated.Value(0)).current;
 
   // Initialize game
@@ -162,6 +183,7 @@ export default function ColorMatch({ navigation }) {
   const startNewRound = () => {
     setRound(generateRound());
     setFoundItems([]);
+    setRoundKey(k => k + 1); // Force re-render with fresh animations
   };
 
   const handleItemPress = useCallback((item) => {
@@ -176,7 +198,6 @@ export default function ColorMatch({ navigation }) {
 
       // Check if round complete
       if (newFound.length === round.matchCount) {
-        // Round complete!
         setShowCelebration(true);
         playCelebrationSound();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -200,10 +221,10 @@ export default function ColorMatch({ navigation }) {
         });
       }
     } else {
-      // Wrong - gentle feedback
-      setWrongPulse(true);
+      // Wrong - gentle feedback on that specific item
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      setTimeout(() => setWrongPulse(false), 300);
+      setWrongItem(item.id);
+      setTimeout(() => setWrongItem(null), 400);
     }
   }, [foundItems, round]);
 
@@ -233,15 +254,17 @@ export default function ColorMatch({ navigation }) {
       />
 
       {/* Grid */}
-      <View style={[styles.grid, wrongPulse && styles.gridWrong]}>
+      <View style={styles.grid}>
         {round.items.map((item) => (
-          <GridItem
-            key={item.id}
-            item={item}
-            onPress={handleItemPress}
-            disabled={showCelebration}
-            found={foundItems.includes(item.id)}
-          />
+          <View key={item.id} style={wrongItem === item.id && styles.wrongShake}>
+            <GridItem
+              item={item}
+              onPress={handleItemPress}
+              disabled={showCelebration}
+              found={foundItems.includes(item.id)}
+              roundKey={roundKey}
+            />
+          </View>
         ))}
       </View>
 
@@ -331,10 +354,15 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
-  targetProgress: {
-    fontSize: 24,
-    color: COLORS.textLight,
+  progressDots: {
+    flexDirection: 'row',
     marginTop: 15,
+    gap: 10,
+  },
+  progressDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
   },
   grid: {
     flexDirection: 'row',
@@ -343,8 +371,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     gap: 15,
   },
-  gridWrong: {
-    opacity: 0.7,
+  wrongShake: {
+    transform: [{ translateX: -3 }],
   },
   gridItem: {
     width: ITEM_SIZE,
