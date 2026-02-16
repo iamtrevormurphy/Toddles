@@ -34,12 +34,11 @@ const games = [
     screen: 'ColorMatch',
   },
   {
-    id: 'coming-soon-1',
-    title: '🔢',
+    id: 'number-catch',
+    title: '🐻',
     subtitle: 'Numbers',
     color: COLORS.bubbleGreen,
-    screen: null,
-    comingSoon: true,
+    screen: 'NumberCatch',
   },
 ];
 

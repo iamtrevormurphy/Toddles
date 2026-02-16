@@ -7,6 +7,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import BubblePop from './src/games/BubblePop';
 import ShapeSorter from './src/games/ShapeSorter';
 import ColorMatch from './src/games/ColorMatch';
+import NumberCatch from './src/games/NumberCatch';
 
 const Stack = createNativeStackNavigator();
 
@@ -24,6 +25,7 @@ export default function App() {
         <Stack.Screen name="BubblePop" component={BubblePop} />
         <Stack.Screen name="ShapeSorter" component={ShapeSorter} />
         <Stack.Screen name="ColorMatch" component={ColorMatch} />
+        <Stack.Screen name="NumberCatch" component={NumberCatch} />
       </Stack.Navigator>
     </NavigationContainer>
   );
