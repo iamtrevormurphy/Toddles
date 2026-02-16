@@ -97,8 +97,9 @@ const Bubble = React.memo(({ bubble, onPop }) => {
             borderRadius: bubble.size / 2,
           },
         ]}
-        onPress={handlePress}
-        activeOpacity={1}
+        onPressIn={handlePress}
+        activeOpacity={0.8}
+        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
       >
         <View
           style={[
