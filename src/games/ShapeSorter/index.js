@@ -19,9 +19,9 @@ const CONVEYOR_Y = 200;
 const SHAPE_SIZE = 70;
 const BIN_SIZE = 100;
 const BIN_Y = height - 280;
-const CONVEYOR_SPEED = 4000; // Time to cross screen
+const CONVEYOR_SPEED = 4000;
 const SPAWN_INTERVAL = 2000;
-const CATCH_ZONE_WIDTH = 100; // How close shape needs to be to bin
+const CATCH_ZONE_WIDTH = 100;
 
 // Shape definitions
 const SHAPES = [
@@ -38,8 +38,13 @@ const BIN_POSITIONS = SHAPES.map((_, index) => {
 });
 
 // Shape component on conveyor
-const ConveyorShape = React.memo(({ shape, onMissed }) => {
+const ConveyorShape = React.memo(({ shape, onMissed, onPositionUpdate }) => {
   useEffect(() => {
+    // Track position via listener
+    const listenerId = shape.animatedX.addListener(({ value }) => {
+      onPositionUpdate(shape.id, value);
+    });
+
     // Start moving animation
     Animated.timing(shape.animatedX, {
       toValue: width + SHAPE_SIZE,
@@ -50,6 +55,10 @@ const ConveyorShape = React.memo(({ shape, onMissed }) => {
         onMissed(shape);
       }
     });
+
+    return () => {
+      shape.animatedX.removeListener(listenerId);
+    };
   }, []);
 
   const renderShape = () => {
@@ -179,7 +188,6 @@ const ConveyorBelt = () => {
 
   return (
     <View style={styles.conveyorContainer}>
-      {/* Belt surface */}
       <View style={styles.conveyorBelt}>
         <Animated.View style={[styles.conveyorPattern, { transform: [{ translateX }] }]}>
           {[...Array(20)].map((_, i) => (
@@ -187,10 +195,8 @@ const ConveyorBelt = () => {
           ))}
         </Animated.View>
       </View>
-      {/* Belt edges */}
       <View style={styles.conveyorEdgeTop} />
       <View style={styles.conveyorEdgeBottom} />
-      {/* Rollers */}
       <View style={[styles.conveyorRoller, { left: 20 }]} />
       <View style={[styles.conveyorRoller, { right: 20 }]} />
     </View>
@@ -219,7 +225,23 @@ export default function ShapeSorter({ navigation }) {
   const [missedBin, setMissedBin] = useState(null);
   const [showCelebration, setShowCelebration] = useState(false);
   const shapeIdRef = useRef(0);
+  const shapePositionsRef = useRef({});
   const celebrationScale = useRef(new Animated.Value(0)).current;
+
+  // Track shape positions
+  const handlePositionUpdate = useCallback((shapeId, x) => {
+    shapePositionsRef.current[shapeId] = x;
+
+    // Update active bin based on position
+    const shapeCenter = x + SHAPE_SIZE / 2;
+    let foundActive = null;
+    BIN_POSITIONS.forEach((binX, index) => {
+      if (Math.abs(shapeCenter - binX) < CATCH_ZONE_WIDTH) {
+        foundActive = index;
+      }
+    });
+    setActiveBin(foundActive);
+  }, []);
 
   // Spawn shapes on conveyor
   useEffect(() => {
@@ -228,47 +250,38 @@ export default function ShapeSorter({ navigation }) {
       setShapes((prev) => [...prev, newShape]);
     };
 
-    // Initial shape
     setTimeout(spawnShape, 500);
 
     const interval = setInterval(spawnShape, SPAWN_INTERVAL);
     return () => clearInterval(interval);
   }, []);
 
-  // Handle shape falling off conveyor (missed)
+  // Handle shape falling off conveyor
   const handleMissed = useCallback((shape) => {
+    delete shapePositionsRef.current[shape.id];
     setShapes((prev) => prev.filter((s) => s.id !== shape.id));
     setStreak(0);
   }, []);
 
   // Handle bin tap
   const handleBinPress = useCallback((binType, binIndex) => {
-    // Find shapes currently over this bin
     const binX = BIN_POSITIONS[binIndex];
 
-    // Check each shape's current position
-    let caught = false;
     setShapes((prev) => {
-      const newShapes = [...prev];
-      for (let i = 0; i < newShapes.length; i++) {
-        const shape = newShapes[i];
-        // Get current animated value
-        let currentX = -SHAPE_SIZE;
-        shape.animatedX.stopAnimation((value) => {
-          currentX = value;
-        });
-
+      for (let i = 0; i < prev.length; i++) {
+        const shape = prev[i];
+        const currentX = shapePositionsRef.current[shape.id] ?? -SHAPE_SIZE;
         const shapeCenter = currentX + SHAPE_SIZE / 2;
         const distance = Math.abs(shapeCenter - binX);
 
         if (distance < CATCH_ZONE_WIDTH) {
           if (shape.type === binType) {
             // Correct match!
-            caught = true;
             playPopSound();
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-            // Animate shape into bin
+            // Stop the movement and animate out
+            shape.animatedX.stopAnimation();
             Animated.parallel([
               Animated.timing(shape.animatedScale, {
                 toValue: 0,
@@ -281,14 +294,14 @@ export default function ShapeSorter({ navigation }) {
                 useNativeDriver: true,
               }),
             ]).start(() => {
+              delete shapePositionsRef.current[shape.id];
               setShapes((current) => current.filter((s) => s.id !== shape.id));
             });
 
-            setScore((prev) => prev + 1);
-            setStreak((prev) => {
-              const newStreak = prev + 1;
+            setScore((s) => s + 1);
+            setStreak((s) => {
+              const newStreak = s + 1;
               if (newStreak > 0 && newStreak % 5 === 0) {
-                // Celebrate every 5 streak
                 setShowCelebration(true);
                 playCelebrationSound();
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -322,32 +335,9 @@ export default function ShapeSorter({ navigation }) {
           }
         }
       }
-      return newShapes;
+      return prev;
     });
   }, []);
-
-  // Update active bin based on shape positions
-  useEffect(() => {
-    const checkInterval = setInterval(() => {
-      let foundActive = null;
-      shapes.forEach((shape) => {
-        let currentX = -SHAPE_SIZE;
-        shape.animatedX.stopAnimation((value) => {
-          currentX = value;
-        });
-        const shapeCenter = currentX + SHAPE_SIZE / 2;
-
-        BIN_POSITIONS.forEach((binX, index) => {
-          if (Math.abs(shapeCenter - binX) < CATCH_ZONE_WIDTH) {
-            foundActive = index;
-          }
-        });
-      });
-      setActiveBin(foundActive);
-    }, 50);
-
-    return () => clearInterval(checkInterval);
-  }, [shapes]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -380,17 +370,17 @@ export default function ShapeSorter({ navigation }) {
       {/* Conveyor belt */}
       <View style={styles.conveyorArea}>
         <ConveyorBelt />
-        {/* Shapes on conveyor */}
         {shapes.map((shape) => (
           <ConveyorShape
             key={shape.id}
             shape={shape}
             onMissed={handleMissed}
+            onPositionUpdate={handlePositionUpdate}
           />
         ))}
       </View>
 
-      {/* Chute/slide from conveyor to bins */}
+      {/* Chute */}
       <View style={styles.chute} />
 
       {/* Bins */}
