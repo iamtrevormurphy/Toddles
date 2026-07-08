@@ -40,5 +40,6 @@ yarn-error.*
 /ios
 /android
 
-# local Claude Code config
-.claude/
+# local Claude Code config (skills ship with the repo)
+.claude/*
+!.claude/skills/

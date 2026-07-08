@@ -1,8 +1,10 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
-import { COLORS } from '../../constants/theme';
+import { COLORS, RADII, SHADOWS, TYPE } from '../../constants/theme';
 import { tapHaptic } from '../../utils/haptics';
 import BackButton from '../../components/BackButton';
+import GradientBackground from '../../components/GradientBackground';
+import { DifficultyDots } from '../../components/icons';
 import PuzzlePreview from './PuzzlePreview';
 import { getPuzzlesBySection } from './puzzles';
 
@@ -17,6 +19,7 @@ export default function PuzzlePicker({ onSelect, onBack }) {
 
   return (
     <View style={styles.container}>
+      <GradientBackground name="dusk" />
       <BackButton onPress={onBack} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>Pick a picture!</Text>
@@ -34,9 +37,11 @@ export default function PuzzlePicker({ onSelect, onBack }) {
                     onSelect(puzzle.id);
                   }}
                 >
-                  <PuzzlePreview puzzle={puzzle} size={cardSize - 24} />
+                  <PuzzlePreview puzzle={puzzle} size={cardSize - 24} extruded />
                   <Text style={styles.cardName}>{puzzle.name}</Text>
-                  <Text style={styles.cardStars}>{'⭐'.repeat(puzzle.difficulty)}</Text>
+                  <View style={styles.cardDots}>
+                    <DifficultyDots level={puzzle.difficulty} />
+                  </View>
                 </TouchableOpacity>
               ))}
             </View>
@@ -50,7 +55,6 @@ export default function PuzzlePicker({ onSelect, onBack }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundSky,
   },
   scroll: {
     paddingTop: 60,
@@ -58,15 +62,13 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   title: {
-    fontSize: 32,
-    fontWeight: 'bold',
+    ...TYPE.title,
     color: COLORS.textDark,
     textAlign: 'center',
     marginBottom: 8,
   },
   sectionTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    ...TYPE.heading,
     color: COLORS.textLight,
     marginTop: 20,
     marginBottom: 12,
@@ -79,23 +81,18 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: COLORS.white,
-    borderRadius: 20,
+    borderRadius: RADII.md,
     paddingVertical: 12,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
+    ...SHADOWS.card,
   },
   cardName: {
+    ...TYPE.heading,
     fontSize: 20,
-    fontWeight: 'bold',
     color: COLORS.textDark,
     marginTop: 6,
   },
-  cardStars: {
-    fontSize: 10,
-    marginTop: 2,
+  cardDots: {
+    marginTop: 6,
   },
 });

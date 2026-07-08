@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -7,13 +7,13 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { COLORS } from '../../constants/theme';
+import { StarIcon } from '../../components/icons';
 
-const STAR_COUNT = 8;
+const STAR_COUNT = 6;
 const STAR_COLORS = [
   COLORS.bubbleYellow,
   COLORS.bubblePink,
-  COLORS.bubbleBlue,
-  COLORS.bubbleGreen,
+  COLORS.bubblePurple,
 ];
 
 function Star({ index }) {
@@ -36,7 +36,7 @@ function Star({ index }) {
 
   return (
     <Animated.View style={[styles.star, animatedStyle]}>
-      <Text style={[styles.starText, { color: STAR_COLORS[index % STAR_COLORS.length] }]}>✦</Text>
+      <StarIcon size={18} color={STAR_COLORS[index % STAR_COLORS.length]} />
     </Animated.View>
   );
 }
@@ -61,10 +61,7 @@ const styles = StyleSheet.create({
   },
   star: {
     position: 'absolute',
-    left: -10,
-    top: -12,
-  },
-  starText: {
-    fontSize: 20,
+    left: -9,
+    top: -9,
   },
 });

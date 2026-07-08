@@ -8,8 +8,10 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Svg, { Path } from 'react-native-svg';
-import { getShape, getShapePath } from './shapes';
+import Svg, { Ellipse, Path } from 'react-native-svg';
+import { DEPTH, shade } from '../../constants/theme';
+import { getShape, getShapePath, getShapeSideColor, getShapeVertices } from './shapes';
+import { extrusionPath } from './extrusion';
 import { selectionHaptic } from '../../utils/haptics';
 import { playPopSound } from '../../utils/sound';
 
@@ -28,6 +30,7 @@ export default function Piece({
   trayScale,
   disabled,
   onDrop,
+  gazeSV = null, // optional {x, y, active} shared values — the companion watches
 }) {
   const shape = getShape(shapeType);
   const W = shape.w * boardScale;
@@ -74,14 +77,26 @@ export default function Piece({
       startY.value = cy.value - e.absoluteY;
       scl.value = withSpring(1.08);
       z.value = 100;
+      if (gazeSV) {
+        gazeSV.x.value = cx.value;
+        gazeSV.y.value = cy.value;
+        gazeSV.active.value = 1;
+      }
       runOnJS(selectionHaptic)();
       runOnJS(playPopSound)();
     })
     .onUpdate((e) => {
       cx.value = startX.value + e.absoluteX;
       cy.value = startY.value + e.absoluteY;
+      if (gazeSV) {
+        gazeSV.x.value = cx.value;
+        gazeSV.y.value = cy.value;
+      }
     })
     .onEnd(() => {
+      if (gazeSV) {
+        gazeSV.active.value = 0;
+      }
       runOnJS(handleDropAt)(cx.value, cy.value);
     });
 
@@ -104,16 +119,46 @@ export default function Piece({
     ],
   }));
 
+  // 2.5D paint: the Svg is padded symmetrically by P on every side (viewBox
+  // AND absolute offset), so the shape's visual center stays the view center —
+  // the layout box, centering math, gesture target, and hitbox are unchanged;
+  // the extrusion and ground shadow just overflow visually.
+  const P = DEPTH.extrude.dy;
+  const PS = P * boardScale;
+  const sideColor = getShapeSideColor(shapeType);
+
   return (
     <GestureDetector gesture={pan}>
       <Animated.View style={[styles.piece, { width: W, height: H }, outerStyle]}>
         <Animated.View style={[styles.inner, innerStyle]}>
-          <Svg width={W} height={H} viewBox={`0 0 ${shape.w} ${shape.h}`}>
+          <Svg
+            width={W + 2 * PS}
+            height={H + 2 * PS}
+            viewBox={`${-P} ${-P} ${shape.w + 2 * P} ${shape.h + 2 * P}`}
+            style={{ position: 'absolute', left: -PS, top: -PS }}
+          >
+            {DEPTH.groundShadow.slice(0, 2).map((s, i) => (
+              <Ellipse
+                key={i}
+                cx={shape.w / 2}
+                cy={shape.h + P * 0.6}
+                rx={shape.w * 0.42 * s.spread}
+                ry={2.6 * s.spread}
+                fill="#3E3A5E"
+                opacity={s.opacity}
+              />
+            ))}
+            <Path
+              d={extrusionPath(getShapeVertices(shapeType))}
+              fill={sideColor}
+              stroke={sideColor}
+              strokeWidth={1}
+            />
             <Path
               d={getShapePath(shapeType)}
               fill={shape.color}
-              stroke="#FFFFFF"
-              strokeWidth={2}
+              stroke={shade(shape.color, -0.15)}
+              strokeWidth={1.5}
               strokeLinejoin="round"
             />
           </Svg>

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, Text } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -8,16 +8,17 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import { MARBLE_COLORS, COLORS } from '../../constants/theme';
+import { COLORS, MARBLE_COLORS, shade } from '../../constants/theme';
 import { MARBLE_SIZE } from './Marble';
 
 const SLOT_SIZE = MARBLE_SIZE + 20;
 
+// A recessed socket: slightly darker inner well + thin ring reads as
+// "put it here" without any arrow. Pulses sage when a marble hovers near.
 export default function TargetSlot({ isHighlighted = false, x, y }) {
   const scale = useSharedValue(1);
   const borderOpacity = useSharedValue(0.5);
 
-  // Pulse animation when highlighted
   useEffect(() => {
     if (isHighlighted) {
       scale.value = withRepeat(
@@ -44,7 +45,7 @@ export default function TargetSlot({ isHighlighted = false, x, y }) {
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
-    borderColor: `rgba(124, 217, 87, ${borderOpacity.value})`,
+    borderColor: `rgba(127, 169, 140, ${borderOpacity.value})`, // COLORS.success
   }));
 
   return (
@@ -59,8 +60,8 @@ export default function TargetSlot({ isHighlighted = false, x, y }) {
         animatedStyle,
       ]}
     >
-      <View style={styles.slotInner}>
-        <Text style={styles.arrowText}>↓</Text>
+      <View style={styles.well}>
+        <View style={styles.ring} />
       </View>
     </Animated.View>
   );
@@ -79,6 +80,8 @@ export function getSlotBounds(x, y) {
 
 export { SLOT_SIZE };
 
+const WELL_SIZE = SLOT_SIZE - 22;
+
 const styles = StyleSheet.create({
   slot: {
     position: 'absolute',
@@ -89,18 +92,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 4,
-    borderColor: 'rgba(124, 217, 87, 0.5)',
     borderStyle: 'dashed',
   },
   slotHighlighted: {
     backgroundColor: MARBLE_COLORS.targetSlotActive,
   },
-  slotInner: {
+  well: {
+    width: WELL_SIZE,
+    height: WELL_SIZE,
+    borderRadius: WELL_SIZE / 2,
+    backgroundColor: shade(MARBLE_COLORS.targetSlot, 0.08),
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  arrowText: {
-    fontSize: 32,
-    color: COLORS.textLight,
-    opacity: 0.5,
+  ring: {
+    width: WELL_SIZE - 14,
+    height: WELL_SIZE - 14,
+    borderRadius: (WELL_SIZE - 14) / 2,
+    borderWidth: 2,
+    borderColor: 'rgba(62, 58, 94, 0.12)',
   },
 });

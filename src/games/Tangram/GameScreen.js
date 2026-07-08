@@ -3,28 +3,35 @@ import { StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'r
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withRepeat,
   withSequence,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import { COLORS, TANGRAM_COLORS, TOUCH } from '../../constants/theme';
+import Svg, { Defs, Ellipse, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
+import { COLORS, RADII, SHADOWS, TANGRAM_COLORS, TOUCH, TYPE, shade } from '../../constants/theme';
 import { findClosestSlot } from '../../utils/collision';
 import { pointInPolygon } from '../../utils/geometry';
 import { snapHaptic, successHaptic, tapHaptic } from '../../utils/haptics';
 import { playCelebrationSound, playSnapSound } from '../../utils/sound';
 import BackButton from '../../components/BackButton';
 import Confetti from '../../components/Confetti';
+import GradientBackground from '../../components/GradientBackground';
+import PrimaryButton from '../../components/PrimaryButton';
+import { ChevronRightIcon } from '../../components/icons';
+import { Companion } from '../../characters';
 import Board from './Board';
 import Piece from './Piece';
 import PuzzlePreview from './PuzzlePreview';
 import SparkleBurst from './SparkleBurst';
-import Svg, { Path } from 'react-native-svg';
 import { getShape, getShapePath } from './shapes';
 import { getBoardFrame, getSlotPolygon, puzzleToScreen, screenToPuzzle } from './transforms';
 
 const HEADER_H = 124;
 const TRAY_SCALE = 0.6;
 const SETTLE_MS = 260;
+const PLATFORM_DEPTH = 12;
+const HINT_DELAY_MS = 12000;
+const HINT_DURATION_MS = 2500;
 
 export default function GameScreen({ puzzle, onBack, onNext, onPickMore }) {
   const { width, height } = useWindowDimensions();
@@ -37,7 +44,10 @@ export default function GameScreen({ puzzle, onBack, onNext, onPickMore }) {
   const [sparkle, setSparkle] = useState(null);
   const [complete, setComplete] = useState(false);
   const [showOverlay, setShowOverlay] = useState(false);
+  const [pipMood, setPipMood] = useState('idle');
   const timersRef = useRef([]);
+  const hintTimerRef = useRef(null);
+  const pipRef = useRef(null);
 
   const pieceCount = puzzle.slots.length;
   const trayRows = pieceCount > 4 ? 2 : 1;
@@ -56,6 +66,21 @@ export default function GameScreen({ puzzle, onBack, onNext, onPickMore }) {
     originY: frame.originY,
   };
   const snapRadius = Math.max(56, boardSize * 0.16);
+
+  // Pip watches the dragged piece through these shared values (written inside
+  // the existing pan worklets in Piece.js — zero React renders during drags).
+  const gaze = {
+    x: useSharedValue(0),
+    y: useSharedValue(0),
+    active: useSharedValue(0),
+  };
+  // Pip perches on the board's top-left corner; on short screens (where the
+  // board rides high) he steps down onto the board so he never hides behind
+  // the back button. Header chrome bottoms out at y≈114.
+  const pipLeft = layout.boardLeft + 14;
+  const pipTop = Math.max(boardTop - 60, 118);
+  const pipAnchor = { x: pipLeft + 34, y: pipTop + 34 };
+  const hintTarget = { x: width / 2, y: trayTop + trayH / 2 };
 
   const slots = useMemo(
     () =>
@@ -88,9 +113,32 @@ export default function GameScreen({ puzzle, onBack, onNext, onPickMore }) {
     });
   }, [puzzle, width, trayTop, trayH, trayRows, pieceCount]);
 
-  useEffect(() => () => timersRef.current.forEach(clearTimeout), []);
+  useEffect(
+    () => () => {
+      timersRef.current.forEach(clearTimeout);
+      clearTimeout(hintTimerRef.current);
+    },
+    []
+  );
+
+  // Gentle nudge after inactivity: Pip leans toward the tray for a moment.
+  const scheduleHint = () => {
+    clearTimeout(hintTimerRef.current);
+    hintTimerRef.current = setTimeout(() => {
+      setPipMood('hinting');
+      hintTimerRef.current = setTimeout(() => {
+        setPipMood('idle');
+        scheduleHint();
+      }, HINT_DURATION_MS);
+    }, HINT_DELAY_MS);
+  };
+  useEffect(() => {
+    if (!complete) scheduleHint();
+    return () => clearTimeout(hintTimerRef.current);
+  }, [complete]);
 
   const handleDrop = (pieceId, pos, callback) => {
+    scheduleHint();
     const shapeType = pieces[pieceId].shape;
     const occupied = Object.values(placements);
     const candidates = slots.filter(
@@ -109,6 +157,7 @@ export default function GameScreen({ puzzle, onBack, onNext, onPickMore }) {
     if (!target) {
       callback(null);
       tapHaptic();
+      pipRef.current?.react('ohno');
       return;
     }
 
@@ -116,6 +165,7 @@ export default function GameScreen({ puzzle, onBack, onNext, onPickMore }) {
     setPlacements((prev) => ({ ...prev, [pieceId]: target.id }));
     snapHaptic();
     playSnapSound();
+    pipRef.current?.react('cheer');
     timersRef.current.push(
       setTimeout(() => {
         setSettled((prev) => ({ ...prev, [pieceId]: target.id }));
@@ -125,39 +175,106 @@ export default function GameScreen({ puzzle, onBack, onNext, onPickMore }) {
   };
 
   const settledSlotIds = Object.values(settled);
+
+  // Calm completion: board settles, a honey glow breathes in, confetti drifts.
+  const boardScale = useSharedValue(1);
+  const glowOpacity = useSharedValue(0);
   useEffect(() => {
     if (settledSlotIds.length === pieceCount && !complete) {
       setComplete(true);
+      setPipMood('celebrating');
+      clearTimeout(hintTimerRef.current);
       successHaptic();
       playCelebrationSound();
-      timersRef.current.push(setTimeout(() => setShowOverlay(true), 1300));
+      boardScale.value = withSequence(
+        withTiming(1.03, { duration: 260 }),
+        withSpring(1, { damping: 18, stiffness: 180 })
+      );
+      glowOpacity.value = withTiming(1, { duration: 700 });
+      timersRef.current.push(setTimeout(() => setShowOverlay(true), 1400));
     }
   }, [settledSlotIds.length, pieceCount, complete]);
 
+  const boardAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: boardScale.value }],
+  }));
+  const glowStyle = useAnimatedStyle(() => ({ opacity: glowOpacity.value }));
+
   return (
     <View style={styles.container}>
+      <GradientBackground name="dawn" />
       <BackButton onPress={onBack} />
       <Text style={styles.title}>{puzzle.name}</Text>
       <View style={styles.goalCard}>
         <PuzzlePreview puzzle={puzzle} size={56} />
       </View>
 
-      <View
+      {/* Honey glow behind the board on completion */}
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.glow,
+          {
+            left: layout.boardLeft - 40,
+            top: boardTop - 40,
+            width: boardSize + 80,
+            height: boardSize + 80,
+          },
+          glowStyle,
+        ]}
+      >
+        <Svg width="100%" height="100%" viewBox="0 0 100 100">
+          <Defs>
+            <RadialGradient id="glow" cx="50%" cy="50%" r="50%">
+              <Stop offset="0%" stopColor={COLORS.celebration} stopOpacity="0.4" />
+              <Stop offset="100%" stopColor={COLORS.celebration} stopOpacity="0" />
+            </RadialGradient>
+          </Defs>
+          <Rect x="0" y="0" width="100" height="100" fill="url(#glow)" />
+        </Svg>
+      </Animated.View>
+
+      <Animated.View
         style={[
           styles.board,
           {
             left: layout.boardLeft,
-            top: layout.boardTop,
+            top: boardTop,
             width: boardSize,
-            height: boardSize,
+            height: boardSize + PLATFORM_DEPTH,
           },
+          boardAnimatedStyle,
         ]}
       >
-        <Board
-          puzzle={puzzle}
-          filledSlotIds={settledSlotIds}
-          size={boardSize}
-          viewBox={`${frame.originX} ${frame.originY} ${frame.span} ${frame.span}`}
+        <BoardPlatform size={boardSize} depth={PLATFORM_DEPTH} />
+        <View style={StyleSheet.absoluteFill}>
+          <Board
+            puzzle={puzzle}
+            filledSlotIds={settledSlotIds}
+            size={boardSize}
+            viewBox={`${frame.originX} ${frame.originY} ${frame.span} ${frame.span}`}
+          />
+        </View>
+      </Animated.View>
+
+      {/* Pip perches on the board's top-left corner, watching */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          left: pipLeft,
+          top: pipTop,
+          zIndex: 50,
+        }}
+      >
+        <Companion
+          ref={pipRef}
+          character="pip"
+          size={68}
+          mood={pipMood}
+          gazeTarget={gaze}
+          anchor={pipAnchor}
+          hintTarget={hintTarget}
         />
       </View>
 
@@ -200,6 +317,7 @@ export default function GameScreen({ puzzle, onBack, onNext, onPickMore }) {
               trayScale={TRAY_SCALE}
               disabled={placements[piece.id] !== undefined || complete}
               onDrop={handleDrop}
+              gazeSV={gaze}
             />
           )
       )}
@@ -207,29 +325,19 @@ export default function GameScreen({ puzzle, onBack, onNext, onPickMore }) {
       {sparkle && <SparkleBurst key={sparkle.key} x={sparkle.x} y={sparkle.y} />}
 
       {complete && (
-        <>
-          <Confetti
-            visible
-            originX={layout.boardLeft + boardSize / 2}
-            originY={layout.boardTop + boardSize / 2}
-          />
-          <BouncingEmoji
-            emoji={puzzle.emoji}
-            x={layout.boardLeft + boardSize / 2}
-            y={layout.boardTop + boardSize / 2}
-          />
-        </>
+        <Confetti
+          visible
+          originX={layout.boardLeft + boardSize / 2}
+          originY={boardTop + boardSize / 2}
+        />
       )}
 
       {showOverlay && (
         <View style={styles.overlay}>
           <View style={styles.overlayCard}>
-            <Text style={styles.overlayTitle}>
-              {puzzle.emoji} {puzzle.name}!
-            </Text>
-            <TouchableOpacity style={styles.nextButton} onPress={onNext}>
-              <Text style={styles.nextButtonText}>Next ➡️</Text>
-            </TouchableOpacity>
+            <PuzzlePreview puzzle={puzzle} size={120} extruded />
+            <Text style={styles.overlayTitle}>{puzzle.name}!</Text>
+            <PrimaryButton label="Next" icon={<ChevronRightIcon size={26} />} onPress={onNext} />
             <TouchableOpacity style={styles.moreButton} onPress={onPickMore}>
               <Text style={styles.moreButtonText}>More pictures</Text>
             </TouchableOpacity>
@@ -240,42 +348,36 @@ export default function GameScreen({ puzzle, onBack, onNext, onPickMore }) {
   );
 }
 
-function BouncingEmoji({ emoji, x, y }) {
-  const scale = useSharedValue(0);
-
-  useEffect(() => {
-    scale.value = withSequence(
-      withTiming(1.2, { duration: 250 }),
-      withRepeat(
-        withSequence(withTiming(0.9, { duration: 350 }), withTiming(1.15, { duration: 350 })),
-        -1,
-        true
-      )
-    );
-  }, []);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
+// The board as a raised stone slab floating on the sky: soft ground shadow,
+// darker bottom band, pale top face. Paint only — board geometry unchanged.
+function BoardPlatform({ size, depth }) {
+  const top = TANGRAM_COLORS.boardBackground;
+  const bottom = shade(top, 0.25);
   return (
-    <Animated.View pointerEvents="none" style={[styles.bounceEmoji, { left: x - 48, top: y - 48 }, animatedStyle]}>
-      <Text style={styles.bounceEmojiText}>{emoji}</Text>
-    </Animated.View>
+    <Svg
+      width={size}
+      height={size + depth + 22}
+      style={StyleSheet.absoluteFill}
+      viewBox={`0 0 ${size} ${size + depth + 22}`}
+    >
+      <Ellipse cx={size / 2} cy={size + depth + 8} rx={size * 0.46} ry={9} fill="#3E3A5E" opacity={0.1} />
+      <Ellipse cx={size / 2} cy={size + depth + 8} rx={size * 0.55} ry={12} fill="#3E3A5E" opacity={0.05} />
+      <Rect x={0} y={depth} width={size} height={size} rx={RADII.lg} fill={bottom} />
+      <Rect x={0} y={0} width={size} height={size} rx={RADII.lg} fill={top} />
+    </Svg>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundLight,
   },
   title: {
     position: 'absolute',
     top: 62,
     alignSelf: 'center',
-    fontSize: 36,
-    fontWeight: 'bold',
+    ...TYPE.title,
+    fontSize: 34,
     color: COLORS.textDark,
   },
   goalCard: {
@@ -284,61 +386,44 @@ const styles = StyleSheet.create({
     right: 20,
     width: 64,
     height: 64,
-    borderRadius: 14,
+    borderRadius: RADII.md,
     backgroundColor: COLORS.white,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...SHADOWS.card,
   },
   board: {
     position: 'absolute',
-    backgroundColor: TANGRAM_COLORS.boardBackground,
-    borderRadius: 20,
+  },
+  glow: {
+    position: 'absolute',
   },
   tray: {
     position: 'absolute',
     left: 8,
     right: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    borderRadius: RADII.lg,
+    backgroundColor: 'rgba(62, 58, 94, 0.06)',
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    backgroundColor: 'rgba(62, 58, 94, 0.35)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
   },
   overlayCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 28,
+    borderRadius: RADII.xl,
     paddingVertical: 28,
     paddingHorizontal: 36,
     alignItems: 'center',
     gap: 16,
   },
   overlayTitle: {
-    fontSize: 34,
-    fontWeight: 'bold',
+    ...TYPE.title,
+    fontSize: 32,
     color: COLORS.textDark,
-  },
-  nextButton: {
-    backgroundColor: COLORS.success,
-    height: TOUCH.buttonHeight,
-    minWidth: 220,
-    borderRadius: TOUCH.buttonHeight / 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: TOUCH.buttonPadding,
-  },
-  nextButtonText: {
-    fontSize: 30,
-    fontWeight: 'bold',
-    color: COLORS.white,
   },
   moreButton: {
     height: 56,
@@ -347,19 +432,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   moreButtonText: {
-    fontSize: 20,
+    ...TYPE.body,
+    fontSize: 19,
     color: COLORS.textLight,
-    fontWeight: '600',
-  },
-  bounceEmoji: {
-    position: 'absolute',
-    width: 96,
-    height: 96,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 900,
-  },
-  bounceEmojiText: {
-    fontSize: 72,
   },
 });

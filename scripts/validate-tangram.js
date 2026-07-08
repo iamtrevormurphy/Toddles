@@ -24,9 +24,11 @@ function loadModule(relPath, context) {
 }
 
 const context = vm.createContext({ console });
-// Stub the theme import used by shapes.js (colors are irrelevant to geometry).
+// Stub the theme imports used by shapes.js (colors are irrelevant to geometry).
 vm.runInContext(
-  'const TANGRAM_COLORS = new Proxy({}, { get: () => "#000" });',
+  `const TANGRAM_COLORS = new Proxy({}, { get: () => "#000000" });
+   const DEPTH = { extrude: { dx: 0, dy: 8 }, sideShade: 0.22 };
+   const shade = () => "#000000";`,
   context
 );
 loadModule('src/utils/geometry.js', context);

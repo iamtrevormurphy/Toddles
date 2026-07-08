@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FFF8E7"
+      "backgroundColor": "#F7F1E8"
     },
     "ios": {
       "supportsTablet": true,
@@ -20,7 +20,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#FFF8E7"
+        "backgroundColor": "#F7F1E8"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.toddles.app"
@@ -31,12 +31,15 @@
       "name": "Toddles",
       "shortName": "Toddles",
       "description": "Educational games for toddlers",
-      "backgroundColor": "#FFF8E7",
-      "themeColor": "#4ECDC4"
+      "backgroundColor": "#F7F1E8",
+      "themeColor": "#E39473"
     },
     "extra": {
       "ageRange": "2-6",
       "category": "educational"
-    }
+    },
+    "plugins": [
+      "expo-font"
+    ]
   }
 }

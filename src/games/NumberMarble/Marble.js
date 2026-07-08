@@ -27,6 +27,7 @@ export default function Marble({
   onDragStart,
   onDragMove,
   isActive = false,
+  gazeSV = null, // optional {x, y, active} shared values — Juno watches
 }) {
   const translateX = useSharedValue(x);
   const translateY = useSharedValue(y);
@@ -72,6 +73,11 @@ export default function Marble({
       startY.value = translateY.value;
       scale.value = withSpring(1.15);
       zIndex.value = 100;
+      if (gazeSV) {
+        gazeSV.x.value = translateX.value;
+        gazeSV.y.value = translateY.value;
+        gazeSV.active.value = 1;
+      }
       runOnJS(selectionHaptic)();
       if (onDragStart) {
         runOnJS(onDragStart)(id);
@@ -83,6 +89,10 @@ export default function Marble({
       rotation.value = event.translationX * ROTATION_FACTOR;
       translateX.value = newX;
       translateY.value = startY.value + event.translationY;
+      if (gazeSV) {
+        gazeSV.x.value = translateX.value;
+        gazeSV.y.value = translateY.value;
+      }
       if (onDragMove) {
         runOnJS(onDragMove)(id, {
           x: translateX.value,
@@ -91,6 +101,9 @@ export default function Marble({
       }
     })
     .onEnd(() => {
+      if (gazeSV) {
+        gazeSV.active.value = 0;
+      }
       scale.value = withSpring(1);
       zIndex.value = 1;
 
@@ -192,10 +205,10 @@ const styles = StyleSheet.create({
     backgroundColor: MARBLE_COLORS.marble,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
+    shadowColor: '#3E3A5E',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
     elevation: 8,
   },
   marbleInner: {
@@ -237,10 +250,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   marbleText: {
+    fontFamily: 'Nunito_800ExtraBold',
     fontSize: 32,
-    fontWeight: 'bold',
     color: MARBLE_COLORS.marbleShine,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowColor: 'rgba(62, 58, 94, 0.3)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },

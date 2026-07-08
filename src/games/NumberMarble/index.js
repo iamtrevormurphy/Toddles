@@ -7,7 +7,8 @@ import {
   Dimensions,
   TouchableOpacity,
 } from 'react-native';
-import { COLORS, MARBLE_COLORS, ANIMATION } from '../../constants/theme';
+import { useSharedValue } from 'react-native-reanimated';
+import { COLORS, MARBLE_COLORS, RADII, SHADOWS, TYPE } from '../../constants/theme';
 import {
   playSplitSound,
   playCombineSound,
@@ -18,6 +19,9 @@ import { successHaptic, errorHaptic, heavyHaptic } from '../../utils/haptics';
 import { distance } from '../../utils/collision';
 import BackButton from '../../components/BackButton';
 import Confetti from '../../components/Confetti';
+import GradientBackground from '../../components/GradientBackground';
+import PrimaryButton from '../../components/PrimaryButton';
+import { ChevronRightIcon, RefreshIcon } from '../../components/icons';
 import Character from './Character';
 import Marble, { MARBLE_SIZE } from './Marble';
 import MarbleArea, { PLAY_AREA, getMarblePositions, getSplitPositions } from './MarbleArea';
@@ -44,6 +48,16 @@ export default function NumberMarble({ navigation }) {
   const [isTargetHighlighted, setIsTargetHighlighted] = useState(false);
   const [draggedMarbleId, setDraggedMarbleId] = useState(null);
   const marbleIdRef = useRef(0);
+  const characterRef = useRef(null);
+
+  // Juno watches the dragged marble through these shared values (written in
+  // Marble.js's pan worklet — zero React renders per frame).
+  const gaze = {
+    x: useSharedValue(0),
+    y: useSharedValue(0),
+    active: useSharedValue(0),
+  };
+  const characterAnchor = { x: width / 2, y: 148 };
 
   // Initialize level
   useEffect(() => {
@@ -144,9 +158,10 @@ export default function NumberMarble({ navigation }) {
           }, 500);
           return;
         } else {
-          // Wrong answer
+          // Wrong answer — Juno stays sympathetic
           playErrorSound();
           errorHaptic();
+          characterRef.current?.react('ohno');
           callback(null);
           return;
         }
@@ -165,6 +180,7 @@ export default function NumberMarble({ navigation }) {
 
         playCombineSound();
         heavyHaptic();
+        characterRef.current?.react('nod');
 
         // Remove both marbles and create combined one
         setMarbles((prev) => [
@@ -205,6 +221,7 @@ export default function NumberMarble({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
+      <GradientBackground name="mist" />
       <BackButton onPress={() => navigation.goBack()} />
 
       {/* Level indicator */}
@@ -214,11 +231,14 @@ export default function NumberMarble({ navigation }) {
         </Text>
       </View>
 
-      {/* Character with target number */}
+      {/* Juno with target number */}
       <View style={styles.characterArea}>
         <Character
+          ref={characterRef}
           targetNumber={currentLevel.target}
           isDancing={isDancing}
+          gazeTarget={gaze}
+          anchor={characterAnchor}
         />
       </View>
 
@@ -238,6 +258,7 @@ export default function NumberMarble({ navigation }) {
           onDragMove={handleDragMove}
           onDragEnd={handleDragEnd}
           isActive={draggedMarbleId !== null && draggedMarbleId !== marble.id}
+          gazeSV={gaze}
         />
       ))}
 
@@ -267,16 +288,14 @@ export default function NumberMarble({ navigation }) {
       {isLevelComplete && (
         <View style={styles.completeOverlay}>
           <View style={styles.completeCard}>
-            <Text style={styles.completeEmoji}>🎉</Text>
             <Text style={styles.completeText}>
               {currentLevel.target}!
             </Text>
-            <TouchableOpacity
-              style={styles.nextButton}
+            <PrimaryButton
+              label="Next"
+              icon={<ChevronRightIcon size={26} />}
               onPress={handleNextLevel}
-            >
-              <Text style={styles.nextButtonText}>Next Level →</Text>
-            </TouchableOpacity>
+            />
           </View>
         </View>
       )}
@@ -287,7 +306,7 @@ export default function NumberMarble({ navigation }) {
           style={styles.retryButton}
           onPress={handleRetry}
         >
-          <Text style={styles.retryButtonText}>↺</Text>
+          <RefreshIcon size={28} color={COLORS.textLight} />
         </TouchableOpacity>
       )}
     </SafeAreaView>
@@ -297,7 +316,6 @@ export default function NumberMarble({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundLight,
   },
   levelIndicator: {
     position: 'absolute',
@@ -306,8 +324,8 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   levelText: {
+    ...TYPE.body,
     fontSize: 18,
-    fontWeight: '600',
     color: COLORS.textLight,
   },
   characterArea: {
@@ -326,49 +344,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   hintText: {
+    ...TYPE.body,
     fontSize: 18,
     color: COLORS.textLight,
     textAlign: 'center',
-    fontStyle: 'italic',
   },
   completeOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(62, 58, 94, 0.35)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 200,
   },
   completeCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 24,
-    padding: 40,
+    borderRadius: RADII.xl,
+    paddingVertical: 32,
+    paddingHorizontal: 40,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  completeEmoji: {
-    fontSize: 64,
+    gap: 20,
+    ...SHADOWS.floating,
   },
   completeText: {
-    fontSize: 48,
-    fontWeight: 'bold',
+    ...TYPE.display,
+    fontSize: 46,
     color: MARBLE_COLORS.marble,
-    marginTop: 8,
-  },
-  nextButton: {
-    marginTop: 24,
-    backgroundColor: MARBLE_COLORS.marble,
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 16,
-  },
-  nextButtonText: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: COLORS.white,
   },
   retryButton: {
     position: 'absolute',
@@ -380,14 +380,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  retryButtonText: {
-    fontSize: 24,
-    color: COLORS.textLight,
+    ...SHADOWS.card,
   },
 });

@@ -13,16 +13,15 @@ import { COLORS } from '../constants/theme';
 
 const { width, height } = Dimensions.get('window');
 
+// Four soft pastels, per the design-direction skill (restraint over rainbow)
 const CONFETTI_COLORS = [
   COLORS.bubblePink,
-  COLORS.bubbleBlue,
   COLORS.bubbleYellow,
   COLORS.bubbleGreen,
   COLORS.bubblePurple,
-  COLORS.bubbleOrange,
 ];
 
-const CONFETTI_COUNT = 30;
+const CONFETTI_COUNT = 18;
 
 function ConfettiPiece({ index, originX, originY, onComplete }) {
   const translateX = useSharedValue(0);
@@ -40,18 +39,19 @@ function ConfettiPiece({ index, originX, originY, onComplete }) {
   const delay = Math.random() * 100;
 
   useEffect(() => {
+    // Calm drift: ~30% slower than the original burst, fading out early
     scale.value = withDelay(
       delay,
       withSequence(
-        withTiming(1, { duration: 100 }),
-        withDelay(600, withTiming(0, { duration: 200 }))
+        withTiming(1, { duration: 130 }),
+        withDelay(700, withTiming(0, { duration: 300 }))
       )
     );
 
     translateX.value = withDelay(
       delay,
       withTiming(targetX, {
-        duration: 800,
+        duration: 1050,
         easing: Easing.out(Easing.cubic),
       })
     );
@@ -60,11 +60,11 @@ function ConfettiPiece({ index, originX, originY, onComplete }) {
       delay,
       withSequence(
         withTiming(targetY, {
-          duration: 400,
+          duration: 520,
           easing: Easing.out(Easing.cubic),
         }),
         withTiming(targetY + 200, {
-          duration: 400,
+          duration: 530,
           easing: Easing.in(Easing.quad),
         })
       )
@@ -73,14 +73,14 @@ function ConfettiPiece({ index, originX, originY, onComplete }) {
     rotation.value = withDelay(
       delay,
       withTiming(rotationTarget, {
-        duration: 800,
+        duration: 1050,
         easing: Easing.out(Easing.cubic),
       })
     );
 
     opacity.value = withDelay(
-      delay + 600,
-      withTiming(0, { duration: 200 }, (finished) => {
+      delay + 650,
+      withTiming(0, { duration: 350 }, (finished) => {
         if (finished && index === 0) {
           runOnJS(onComplete)();
         }
@@ -98,8 +98,10 @@ function ConfettiPiece({ index, originX, originY, onComplete }) {
     opacity: opacity.value,
   }));
 
-  const size = 8 + Math.random() * 8;
+  // Soft petals: circles and rounded ovals only, no hard rectangles
+  const size = 8 + Math.random() * 6;
   const isCircle = index % 3 === 0;
+  const height = isCircle ? size : size * 0.65;
 
   return (
     <Animated.View
@@ -110,8 +112,8 @@ function ConfettiPiece({ index, originX, originY, onComplete }) {
           left: originX,
           top: originY,
           width: size,
-          height: isCircle ? size : size * 0.6,
-          borderRadius: isCircle ? size / 2 : 2,
+          height,
+          borderRadius: height / 2,
           backgroundColor: color,
         },
       ]}

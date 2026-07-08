@@ -1,4 +1,4 @@
-import { TANGRAM_COLORS } from '../../constants/theme';
+import { DEPTH, TANGRAM_COLORS, shade } from '../../constants/theme';
 
 // Design grid: all shape dimensions are multiples of U so pieces tile exactly.
 // Puzzle space is 320x320 (see puzzles.js).
@@ -51,6 +51,15 @@ export const SHAPES = {
 
 export function getShape(type) {
   return SHAPES[type];
+}
+
+// Precomputed 2.5D side-face colors per shape type (never compute per frame)
+const SIDE_COLORS = Object.fromEntries(
+  Object.entries(SHAPES).map(([type, s]) => [type, shade(s.color, DEPTH.sideShade)])
+);
+
+export function getShapeSideColor(type) {
+  return SIDE_COLORS[type];
 }
 
 export function getShapeVertices(type, flip = false) {

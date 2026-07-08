@@ -1,38 +1,60 @@
-// Toddler-friendly design constants
-// Based on early childhood development research
+// Toddles design tokens — the single source of truth for the visual identity.
+// Direction: Monument Valley calm (pastel gradient skies, 2.5D thickness,
+// long soft shadows) with Linear/Notion restraint and Duolingo friendliness.
+// Full brand rules: .claude/skills/design-direction/SKILL.md
+
+// Ink is the only dark in the app — deep plum-navy, never pure black.
+const INK = '#3E3A5E';
+
+// Mix a hex color toward the ink plum. amount 0..1 (0.22 = standard 2.5D
+// side-face shade). Negative amounts lighten toward warm white instead.
+export function shade(hex, amount = 0.22) {
+  const target = amount < 0 ? [255, 253, 249] : [62, 58, 94]; // #FFFDF9 / INK
+  const t = Math.abs(amount);
+  const n = parseInt(hex.slice(1), 16);
+  const channels = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c, i) =>
+    Math.round(c + (target[i] - c) * t)
+  );
+  return `#${channels.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
 
 export const COLORS = {
-  // Primary palette - bright, saturated colors that toddlers respond to
-  bubblePink: '#FF6B9D',
-  bubbleBlue: '#4ECDC4',
-  bubbleYellow: '#FFE66D',
-  bubbleGreen: '#7ED957',
-  bubblePurple: '#A28BFE',
-  bubbleOrange: '#FF9F43',
+  // Accent palette — muted, warm, hue-distinct
+  bubblePink: '#D98BA3',   // dusty rose
+  bubbleBlue: '#7FB5B5',   // muted teal
+  bubbleYellow: '#F0C987', // honey / celebration gold
+  bubbleGreen: '#A3C39E',  // sage
+  bubblePurple: '#A99BD1', // lavender
+  bubbleOrange: '#E39473', // terracotta — THE action accent
 
   // Background colors
-  backgroundLight: '#FFF8E7',
-  backgroundSky: '#E8F4FD',
+  backgroundLight: '#F7F1E8', // warm sand
+  backgroundSky: '#EDE7F4',   // pale lavender wash
 
   // UI colors
-  white: '#FFFFFF',
-  textDark: '#2D3436',
-  textLight: '#636E72',
+  white: '#FFFDF9', // warm white surface (never pure #FFFFFF for surfaces)
+  textDark: INK,
+  textLight: '#7A7396',
 
   // Feedback colors
-  success: '#00B894',
-  celebration: '#FDCB6E',
+  success: '#7FA98C', // calm sage-green
+  celebration: '#F0C987',
 };
 
-// All bubble colors for random selection
+// All accent colors for random selection (confetti etc.)
 export const BUBBLE_COLORS = [
   COLORS.bubblePink,
-  COLORS.bubbleBlue,
   COLORS.bubbleYellow,
   COLORS.bubbleGreen,
   COLORS.bubblePurple,
-  COLORS.bubbleOrange,
 ];
+
+// Sky gradient pairs, top → bottom. Every screen sits on one of these.
+export const GRADIENTS = {
+  dawn: ['#E8DFF5', '#FBE7D6'], // lavender → peach: Home, Tangram play
+  dusk: ['#DDE7F0', '#F3E3E9'], // pale blue → rose: puzzle picker
+  mist: ['#E3EDF1', '#EFE6F0'], // pale teal → lilac: NumberMarble
+};
 
 // Touch targets - minimum 64px for toddler fingers
 export const TOUCH = {
@@ -43,44 +65,104 @@ export const TOUCH = {
   buttonPadding: 24,
 };
 
+export const RADII = {
+  sm: 8,
+  md: 16,
+  lg: 24,
+  xl: 32,
+  pill: 999,
+};
+
+export const SPACING = [4, 8, 12, 16, 24, 32, 48];
+
+// Shadows are always plum-tinted, never black.
+export const SHADOWS = {
+  card: {
+    shadowColor: INK,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  floating: {
+    shadowColor: INK,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    elevation: 6,
+  },
+};
+
+// Type scale. RN custom fonts bind weight into the family name — always use
+// fontFamily from here, never fontWeight alongside a Nunito family.
+export const TYPE = {
+  display: { fontFamily: 'Nunito_800ExtraBold', fontSize: 40 },
+  title: { fontFamily: 'Nunito_800ExtraBold', fontSize: 28 },
+  heading: { fontFamily: 'Nunito_700Bold', fontSize: 22 },
+  body: { fontFamily: 'Nunito_600SemiBold', fontSize: 17 },
+  label: { fontFamily: 'Nunito_700Bold', fontSize: 14 },
+};
+
+// The 2.5D recipe: extrusion straight down (flip-invariant — snapped tangram
+// pieces animate scaleX(-1)), side faces shaded toward ink, ground shadows
+// as stacked soft ellipses (never blur filters).
+export const DEPTH = {
+  extrude: { dx: 0, dy: 8 }, // puzzle units
+  sideShade: 0.22,
+  groundShadow: [
+    { opacity: 0.1, spread: 1.0 },
+    { opacity: 0.06, spread: 1.35 },
+    { opacity: 0.04, spread: 1.7 },
+  ],
+};
+
 // Animation timings
 export const TIMING = {
-  bubbleRiseDuration: 8000, // 8 seconds to float up
+  bubbleRiseDuration: 8000,
   popDuration: 200,
   celebrationDuration: 1500,
-  spawnInterval: 800, // New bubble every 800ms
+  spawnInterval: 800,
 };
 
 // Game settings
 export const GAME = {
   maxBubbles: 12,
-  celebrationThreshold: 10, // Celebrate every 10 pops
+  celebrationThreshold: 10,
 };
 
-// Tangram game colors - bright rainbow colors like classic tangram sets
+// Tangram piece colors — pastel but hue-distinct: the 4-year-old plays by
+// matching piece color to slot color, so shape-type hues must never converge.
 export const TANGRAM_COLORS = {
-  largeTriangle1: '#FF3B30', // Bright red
-  largeTriangle2: '#FFCC00', // Golden yellow
-  mediumTriangle: '#34C759', // Bright green
-  smallTriangle1: '#007AFF', // Bright blue
-  smallTriangle2: '#5856D6', // Purple
-  square: '#FF9500',         // Orange
-  parallelogram: '#00C7BE',  // Cyan/Teal
-  boardBackground: '#F5F0E8',
-  targetOutline: '#D4C8B8',
-  snapHighlight: '#34C759',
+  largeTriangle1: '#E2795B', // terracotta
+  largeTriangle2: '#E8A87C', // peach (kept for compatibility, unused by shapes)
+  mediumTriangle: '#8FB26E', // moss green
+  smallTriangle1: '#6C8FD4', // cornflower blue
+  smallTriangle2: '#8E7CC3', // lavender (kept for compatibility)
+  square: '#EDB95F',         // amber
+  parallelogram: '#5FA8A0',  // muted teal
+  boardBackground: '#F3EBDD', // pale stone platform top
+  targetOutline: '#C9BBA8',
+  snapHighlight: '#7FA98C',
 };
 
-// Number Marble game colors
+// Precomputed 2.5D side-face colors so render code never computes per frame.
+export const TANGRAM_SIDE_COLORS = Object.fromEntries(
+  Object.entries(TANGRAM_COLORS).map(([key, color]) => [
+    key,
+    shade(color, DEPTH.sideShade),
+  ])
+);
+
+// Number Marble game colors — dusty indigo world
 export const MARBLE_COLORS = {
-  marble: '#5C7AEA',         // Blue marble base
-  marbleHighlight: '#8FA4F0',
-  marbleShine: '#FFFFFF',
-  targetSlot: '#E8E8E8',
-  targetSlotActive: '#C7F5C7',
-  characterBody: '#FFB347',  // Orange bear
-  characterFace: '#FFFFFF',
-  playArea: '#F0F7FF',
+  marble: '#6B5B95',
+  marbleHighlight: '#9385BC',
+  marbleShine: '#FFFDF9',
+  targetSlot: '#E6DFEE',
+  targetSlotActive: '#D5E5D3',
+  characterBody: '#A99BD1',
+  characterFace: '#FFFDF9',
+  playArea: '#EFEAF6',
 };
 
 // Extended animation timings
