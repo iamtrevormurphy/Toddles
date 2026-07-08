@@ -64,6 +64,30 @@ update this file):
   not zippy: one gentle settle, no infinite bouncing on interactive
   elements; celebrations scale-settle and fade, never strobe.
 
+## Depth policy — depth earns its keep
+
+Never use depth for depth's sake. The rules:
+
+1. **Two shadow systems, never both on one object.** World objects (pieces,
+   marbles, characters, platforms) use ink-ellipse ground shadows; UI chrome
+   (cards, buttons, overlays) uses `SHADOWS.card`/`SHADOWS.floating`.
+2. **Ground shadows appear only under LIFTED things** — a dragged
+   piece/marble, a hopping character. Shadow opacity/offset/scale animates
+   with the lift and is **zero at rest**. `Companion.js` is the reference
+   implementation; Tangram pieces drive theirs off the existing `scl`
+   shared value.
+3. **Resting world objects are grounded by contact, not shadow**: the 2.5D
+   darker bottom band for slabs; at most one tight contact ellipse for
+   marbles (which shrinks/fades/separates on pickup).
+4. **Platforms cast ellipses only onto empty sky.** If a panel or
+   interactive zone sits directly below a slab (tangram tray, marble slot
+   zone), drop the ellipses and attach the panel flush to the slab's bottom
+   band — a shelf, not a second floating object.
+5. **Shadows never overlap** each other or double with a panel's tint.
+6. **One shadow per object, at its base, straight down** (matches the (0,8)
+   extrusion light). Shadows belong to the ground — they never rotate or
+   flip with the body.
+
 ## Do / Don't
 
 - DON'T use pure black anywhere, or saturated iOS-class primaries
@@ -73,7 +97,8 @@ update this file):
 - DON'T use dashed borders except for "empty slot" affordances.
 - DON'T shrink touch targets below `TOUCH.minTargetSize` (64pt) or remove
   hitSlops. Child-facing text ≥ 17pt, contrast ≥ 4.5:1.
-- DO give every floating object the ground-shadow recipe.
+- DO give lifted objects the ground-shadow recipe (see Depth policy —
+  never always-on).
 - DO keep chrome to neutrals + at most one accent; game pieces are exempt.
 - DO keep one companion character max per screen (see characters.md).
 

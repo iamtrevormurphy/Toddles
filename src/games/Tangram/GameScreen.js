@@ -7,7 +7,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import Svg, { Defs, Ellipse, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { COLORS, RADII, SHADOWS, TANGRAM_COLORS, TOUCH, TYPE, shade } from '../../constants/theme';
 import { findClosestSlot } from '../../utils/collision';
 import { pointInPolygon } from '../../utils/geometry';
@@ -53,10 +53,12 @@ export default function GameScreen({ puzzle, onBack, onNext, onPickMore }) {
   const trayRows = pieceCount > 4 ? 2 : 1;
   const trayH = trayRows === 1 ? 132 : 204;
   const boardSize = Math.min(width - 16, height - HEADER_H - trayH - 8);
-  // Center board + tray in the space below the header when the screen is tall.
-  const contentH = boardSize + 8 + trayH;
+  // Center board + tray in the space below the header when the screen is
+  // tall. The tray attaches flush under the slab's bottom band — a shelf,
+  // not a second floating panel (depth policy).
+  const contentH = boardSize + PLATFORM_DEPTH + trayH;
   const boardTop = HEADER_H + Math.max(0, (height - HEADER_H - contentH) / 2);
-  const trayTop = boardTop + boardSize + 8;
+  const trayTop = boardTop + boardSize + PLATFORM_DEPTH;
   const frame = getBoardFrame(puzzle, boardSize);
   const layout = {
     boardLeft: (width - boardSize) / 2,
@@ -348,20 +350,19 @@ export default function GameScreen({ puzzle, onBack, onNext, onPickMore }) {
   );
 }
 
-// The board as a raised stone slab floating on the sky: soft ground shadow,
-// darker bottom band, pale top face. Paint only — board geometry unchanged.
+// The board as a raised stone slab: darker bottom band grounds it (depth
+// policy — the tray attaches flush below, so no ground ellipses here).
+// Paint only — board geometry unchanged.
 function BoardPlatform({ size, depth }) {
   const top = TANGRAM_COLORS.boardBackground;
   const bottom = shade(top, 0.25);
   return (
     <Svg
       width={size}
-      height={size + depth + 22}
+      height={size + depth}
       style={StyleSheet.absoluteFill}
-      viewBox={`0 0 ${size} ${size + depth + 22}`}
+      viewBox={`0 0 ${size} ${size + depth}`}
     >
-      <Ellipse cx={size / 2} cy={size + depth + 8} rx={size * 0.46} ry={9} fill="#3E3A5E" opacity={0.1} />
-      <Ellipse cx={size / 2} cy={size + depth + 8} rx={size * 0.55} ry={12} fill="#3E3A5E" opacity={0.05} />
       <Rect x={0} y={depth} width={size} height={size} rx={RADII.lg} fill={bottom} />
       <Rect x={0} y={0} width={size} height={size} rx={RADII.lg} fill={top} />
     </Svg>
@@ -419,6 +420,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 36,
     alignItems: 'center',
     gap: 16,
+    ...SHADOWS.floating,
   },
   overlayTitle: {
     ...TYPE.title,

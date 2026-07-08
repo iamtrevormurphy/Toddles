@@ -1,6 +1,8 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import Animated, {
+  Extrapolation,
+  interpolate,
   useSharedValue,
   useAnimatedStyle,
   withSpring,
@@ -122,15 +124,26 @@ export default function Piece({
   // 2.5D paint: the Svg is padded symmetrically by P on every side (viewBox
   // AND absolute offset), so the shape's visual center stays the view center —
   // the layout box, centering math, gesture target, and hitbox are unchanged;
-  // the extrusion and ground shadow just overflow visually.
+  // the extrusion just overflows visually.
   const P = DEPTH.extrude.dy;
   const PS = P * boardScale;
   const sideColor = getShapeSideColor(shapeType);
 
+  // Ground shadow only while LIFTED (depth policy): a translate-only sibling
+  // layer (never rotates/flips with the piece), driven by the existing scl
+  // shared value — hidden at tray rest (0.6), visible while dragged (1.08),
+  // gone again as the piece lands (1.0). Zero gesture changes.
+  const shadowStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scl.value, [1.0, 1.08], [0, 1], Extrapolation.CLAMP),
+    transform: [
+      { translateY: interpolate(scl.value, [1.0, 1.08], [0, 6], Extrapolation.CLAMP) },
+    ],
+  }));
+
   return (
     <GestureDetector gesture={pan}>
       <Animated.View style={[styles.piece, { width: W, height: H }, outerStyle]}>
-        <Animated.View style={[styles.inner, innerStyle]}>
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, shadowStyle]}>
           <Svg
             width={W + 2 * PS}
             height={H + 2 * PS}
@@ -148,6 +161,15 @@ export default function Piece({
                 opacity={s.opacity}
               />
             ))}
+          </Svg>
+        </Animated.View>
+        <Animated.View style={[styles.inner, innerStyle]}>
+          <Svg
+            width={W + 2 * PS}
+            height={H + 2 * PS}
+            viewBox={`${-P} ${-P} ${shape.w + 2 * P} ${shape.h + 2 * P}`}
+            style={{ position: 'absolute', left: -PS, top: -PS }}
+          >
             <Path
               d={extrusionPath(getShapeVertices(shapeType))}
               fill={sideColor}

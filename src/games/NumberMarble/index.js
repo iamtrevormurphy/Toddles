@@ -8,14 +8,14 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
-import { COLORS, MARBLE_COLORS, RADII, SHADOWS, TYPE } from '../../constants/theme';
+import { ANIMATION, COLORS, MARBLE_COLORS, RADII, SHADOWS, TYPE } from '../../constants/theme';
 import {
   playSplitSound,
   playCombineSound,
   playCelebrationSound,
-  playErrorSound,
+  playOverflowSound,
 } from '../../utils/sound';
-import { successHaptic, errorHaptic, heavyHaptic } from '../../utils/haptics';
+import { successHaptic, tapHaptic, heavyHaptic } from '../../utils/haptics';
 import { distance } from '../../utils/collision';
 import BackButton from '../../components/BackButton';
 import Confetti from '../../components/Confetti';
@@ -24,7 +24,7 @@ import PrimaryButton from '../../components/PrimaryButton';
 import { ChevronRightIcon, RefreshIcon } from '../../components/icons';
 import Character from './Character';
 import Marble, { MARBLE_SIZE } from './Marble';
-import MarbleArea, { PLAY_AREA, getMarblePositions, getSplitPositions } from './MarbleArea';
+import MarbleArea, { PLAY_AREA, getMarblePositions, getSplitPositions, resolveOverlaps } from './MarbleArea';
 import TargetSlot, { getSlotBounds, SLOT_SIZE } from './TargetSlot';
 import { LEVELS, getNextLevel, getTotalLevels } from './levels';
 
@@ -47,8 +47,24 @@ export default function NumberMarble({ navigation }) {
   const [isLevelComplete, setIsLevelComplete] = useState(false);
   const [isTargetHighlighted, setIsTargetHighlighted] = useState(false);
   const [draggedMarbleId, setDraggedMarbleId] = useState(null);
+  const [slotWobbleKey, setSlotWobbleKey] = useState(0);
   const marbleIdRef = useRef(0);
   const characterRef = useRef(null);
+  const timersRef = useRef([]);
+
+  useEffect(
+    () => () => timersRef.current.forEach(clearTimeout),
+    []
+  );
+
+  const later = (fn, ms) => {
+    timersRef.current.push(setTimeout(fn, ms));
+  };
+
+  const clampToPlayArea = (pos) => ({
+    x: Math.min(Math.max(pos.x, PLAY_AREA.x + 40), PLAY_AREA.x + PLAY_AREA.width - 40),
+    y: Math.min(Math.max(pos.y, PLAY_AREA.y + 40), PLAY_AREA.y + PLAY_AREA.height - 40),
+  });
 
   // Juno watches the dragged marble through these shared values (written in
   // Marble.js's pan worklet — zero React renders per frame).
@@ -66,6 +82,8 @@ export default function NumberMarble({ navigation }) {
 
   // Initialize marbles for a level
   const initializeLevel = (level) => {
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
     const positions = getMarblePositions(level.marbles.length);
     const newMarbles = level.marbles.map((value, index) => ({
       id: marbleIdRef.current++,
@@ -73,45 +91,46 @@ export default function NumberMarble({ navigation }) {
       x: positions[index].x,
       y: positions[index].y,
     }));
-    setMarbles(newMarbles);
+    setMarbles(resolveOverlaps(newMarbles));
     setIsDancing(false);
     setIsLevelComplete(false);
     setShowConfetti(false);
   };
 
-  // Split marble into two
+  // Split marble into two: children mount AT the parent (fromX/fromY) and
+  // roll apart to their split positions with opposite spins; neighbors get
+  // bumped aside by resolveOverlaps.
   const handleMarbleTap = useCallback((marbleId) => {
     setMarbles((prev) => {
       const marble = prev.find((m) => m.id === marbleId);
-      if (!marble || marble.value <= 1) return prev;
+      if (!marble || marble.value <= 1 || marble.merging || marble.inSlot) return prev;
 
-      // Split the value
       const half1 = Math.floor(marble.value / 2);
       const half2 = Math.ceil(marble.value / 2);
-
-      // Get split positions
       const positions = getSplitPositions(marble.x, marble.y);
 
-      // Create two new marbles
       const newMarbles = [
         {
           id: marbleIdRef.current++,
           value: half1,
           x: positions[0].x,
           y: positions[0].y,
+          fromX: marble.x,
+          fromY: marble.y,
         },
         {
           id: marbleIdRef.current++,
           value: half2,
           x: positions[1].x,
           y: positions[1].y,
+          fromX: marble.x,
+          fromY: marble.y,
         },
       ];
 
       playSplitSound();
 
-      // Remove old marble and add new ones
-      return [...prev.filter((m) => m.id !== marbleId), ...newMarbles];
+      return resolveOverlaps([...prev.filter((m) => m.id !== marbleId), ...newMarbles]);
     });
   }, []);
 
@@ -127,6 +146,100 @@ export default function NumberMarble({ navigation }) {
     setIsTargetHighlighted(dist < SLOT_SIZE);
   }, []);
 
+  // Two-phase merge: both marbles roll to the meeting point (phase 1), then
+  // become one after ANIMATION.combineDuration (phase 2 — sounds/Juno land
+  // when they visually meet). The resident keeps its id so nothing pops.
+  const startMerge = (dragged, resident, position, callback, { intoSlot = false } = {}) => {
+    const midX = intoSlot ? resident.x : (position.x + resident.x) / 2;
+    const midY = intoSlot ? resident.y : (position.y + resident.y) / 2;
+    callback({ x: midX, y: midY });
+    setMarbles((prev) =>
+      prev.map((m) =>
+        m.id === resident.id || m.id === dragged.id
+          ? { ...m, x: midX, y: midY, merging: true, ...(m.id === dragged.id && dragged.inSlot ? { inSlot: false } : {}) }
+          : m
+      )
+    );
+    later(() => {
+      playCombineSound();
+      heavyHaptic();
+      characterRef.current?.react('nod');
+      setMarbles((prev) =>
+        resolveOverlaps(
+          prev
+            .filter((m) => m.id !== dragged.id)
+            .map((m) =>
+              m.id === resident.id
+                ? { ...m, value: resident.value + dragged.value, merging: false }
+                : m
+            ),
+          PLAY_AREA,
+          { pinnedId: resident.id }
+        )
+      );
+    }, ANIMATION.combineDuration);
+  };
+
+  // Win/accumulate/overflow once a marble settles into the socket
+  const settleIntoSlot = (marbleId, newSum, residentId) => {
+    const absorb = (prev) =>
+      prev
+        .filter((m) => m.id !== residentId)
+        .map((m) =>
+          m.id === marbleId
+            ? { ...m, inSlot: true, merging: false, x: TARGET_SLOT.x, y: TARGET_SLOT.y, value: newSum }
+            : m
+        );
+
+    if (newSum === currentLevel.target) {
+      setMarbles(absorb);
+      setIsDancing(true);
+      setIsLevelComplete(true);
+      setShowConfetti(true);
+      playCelebrationSound();
+      successHaptic();
+      later(() => setMarbles((prev) => prev.filter((m) => !m.inSlot)), 500);
+      return;
+    }
+
+    if (newSum > currentLevel.target) {
+      // Overflow — never an error: the sum shows for a beat, the socket
+      // wobbles, then the whole accumulated marble rolls back out (sum
+      // conserved, the child can re-split it).
+      setMarbles(absorb);
+      if (residentId != null) {
+        playCombineSound();
+        heavyHaptic();
+      }
+      setSlotWobbleKey((k) => k + 1);
+      later(() => {
+        playOverflowSound();
+        tapHaptic();
+        characterRef.current?.react('ohno');
+        const eject = clampToPlayArea({
+          x: TARGET_SLOT.x,
+          y: PLAY_AREA.y + PLAY_AREA.height - 60,
+        });
+        setMarbles((prev) =>
+          resolveOverlaps(
+            prev.map((m) =>
+              m.id === marbleId ? { ...m, inSlot: false, x: eject.x, y: eject.y } : m
+            ),
+            PLAY_AREA,
+            { pinnedId: marbleId }
+          )
+        );
+      }, 550);
+      return;
+    }
+
+    // Accumulate: the slot marble grows toward the ring
+    setMarbles(absorb);
+    playCombineSound();
+    heavyHaptic();
+    characterRef.current?.react('nod');
+  };
+
   // Handle marble drag end
   const handleDragEnd = useCallback(
     (marbleId, position, callback) => {
@@ -139,61 +252,51 @@ export default function NumberMarble({ navigation }) {
         return;
       }
 
-      // Check if dropped on target slot
+      const slotMarble = marbles.find((m) => m.inSlot && m.id !== marbleId);
       const distToTarget = distance(position, { x: TARGET_SLOT.x, y: TARGET_SLOT.y });
-      if (distToTarget < SLOT_SIZE) {
-        // Check if correct answer
-        if (draggedMarble.value === currentLevel.target) {
-          // Correct!
-          setIsDancing(true);
-          setIsLevelComplete(true);
-          setShowConfetti(true);
-          playCelebrationSound();
-          successHaptic();
-          callback({ x: TARGET_SLOT.x, y: TARGET_SLOT.y });
 
-          // Remove marble after animation
-          setTimeout(() => {
-            setMarbles((prev) => prev.filter((m) => m.id !== marbleId));
-          }, 500);
-          return;
-        } else {
-          // Wrong answer — Juno stays sympathetic
-          playErrorSound();
-          errorHaptic();
-          characterRef.current?.react('ohno');
-          callback(null);
+      // --- Dropped on the target slot: accumulate toward the target ---
+      if (distToTarget < SLOT_SIZE) {
+        if (draggedMarble.inSlot) {
+          // The slot marble itself — settle back into the socket
+          callback({ x: TARGET_SLOT.x, y: TARGET_SLOT.y });
           return;
         }
+        const newSum = (slotMarble?.value ?? 0) + draggedMarble.value;
+        callback({ x: TARGET_SLOT.x, y: TARGET_SLOT.y });
+        setMarbles((prev) =>
+          prev.map((m) => (m.id === marbleId ? { ...m, merging: true } : m))
+        );
+        later(() => settleIntoSlot(marbleId, newSum, slotMarble?.id ?? null), ANIMATION.combineDuration);
+        return;
       }
 
-      // Check if dropped on another marble (combine)
+      // --- Dropped on another board marble: two-phase combine ---
       const otherMarble = marbles.find(
-        (m) => m.id !== marbleId && distance(position, { x: m.x, y: m.y }) < COMBINE_THRESHOLD
+        (m) =>
+          m.id !== marbleId &&
+          !m.inSlot &&
+          !m.merging &&
+          distance(position, { x: m.x, y: m.y }) < COMBINE_THRESHOLD
       );
-
       if (otherMarble) {
-        // Combine marbles
-        const combinedValue = draggedMarble.value + otherMarble.value;
-        const combinedX = (position.x + otherMarble.x) / 2;
-        const combinedY = (position.y + otherMarble.y) / 2;
+        startMerge(draggedMarble, otherMarble, position, callback);
+        return;
+      }
 
-        playCombineSound();
-        heavyHaptic();
-        characterRef.current?.react('nod');
-
-        // Remove both marbles and create combined one
-        setMarbles((prev) => [
-          ...prev.filter((m) => m.id !== marbleId && m.id !== otherMarble.id),
-          {
-            id: marbleIdRef.current++,
-            value: combinedValue,
-            x: combinedX,
-            y: combinedY,
-          },
-        ]);
-
-        callback({ x: combinedX, y: combinedY });
+      // --- Slot marble dragged out to open board: retrieval ---
+      if (draggedMarble.inSlot) {
+        const dropPos = clampToPlayArea(position);
+        callback(dropPos);
+        setMarbles((prev) =>
+          resolveOverlaps(
+            prev.map((m) =>
+              m.id === marbleId ? { ...m, inSlot: false, x: dropPos.x, y: dropPos.y } : m
+            ),
+            PLAY_AREA,
+            { pinnedId: marbleId }
+          )
+        );
         return;
       }
 
@@ -245,6 +348,15 @@ export default function NumberMarble({ navigation }) {
       {/* Play area background */}
       <MarbleArea />
 
+      {/* Target slot (rendered under the marbles so the slot marble sits in it) */}
+      <TargetSlot
+        x={TARGET_SLOT.x}
+        y={TARGET_SLOT.y}
+        isHighlighted={isTargetHighlighted}
+        hasMarble={marbles.some((m) => m.inSlot)}
+        wobbleKey={slotWobbleKey}
+      />
+
       {/* Marbles */}
       {marbles.map((marble) => (
         <Marble
@@ -253,6 +365,13 @@ export default function NumberMarble({ navigation }) {
           value={marble.value}
           x={marble.x}
           y={marble.y}
+          fromX={marble.fromX}
+          fromY={marble.fromY}
+          restScale={
+            marble.inSlot
+              ? 0.62 + 0.38 * Math.min(1, marble.value / currentLevel.target)
+              : 1
+          }
           onTap={handleMarbleTap}
           onDragStart={handleDragStart}
           onDragMove={handleDragMove}
@@ -261,13 +380,6 @@ export default function NumberMarble({ navigation }) {
           gazeSV={gaze}
         />
       ))}
-
-      {/* Target slot */}
-      <TargetSlot
-        x={TARGET_SLOT.x}
-        y={TARGET_SLOT.y}
-        isHighlighted={isTargetHighlighted}
-      />
 
       {/* Hint text */}
       {!isLevelComplete && (

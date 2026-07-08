@@ -5,7 +5,7 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
 } from 'react-native-reanimated';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, ClipPath, Defs, Path } from 'react-native-svg';
 import { COLORS, MARBLE_COLORS, RADII, SHADOWS, TYPE, shade } from '../constants/theme';
 import GradientBackground from '../components/GradientBackground';
 import { Companion } from '../characters';
@@ -15,12 +15,28 @@ import { getPuzzleById } from '../games/Tangram/puzzles';
 // Tangram card art: the bird puzzle IS Pip's silhouette — the brand loop.
 const birdPuzzle = getPuzzleById('bird');
 
+const circlePath = (cx, cy, r) =>
+  `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${2 * r} 0 a ${r} ${r} 0 1 0 ${-2 * r} 0 Z`;
+// Bottom crescent shading (evenodd, clipped to the marble) — matches the
+// in-game 2.5D marble face
+const crescent = (cx, cy, r) => `${circlePath(cx, cy, r)} ${circlePath(cx, cy - r * 0.18, r)}`;
+
 function MarblesArt({ size }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 100 100">
+      <Defs>
+        <ClipPath id="artMarbleA">
+          <Circle cx={38} cy={58} r={26} />
+        </ClipPath>
+        <ClipPath id="artMarbleB">
+          <Circle cx={72} cy={44} r={19} />
+        </ClipPath>
+      </Defs>
       <Circle cx={38} cy={58} r={26} fill={MARBLE_COLORS.marble} />
+      <Path d={crescent(38, 58, 26)} fill="#3E3A5E" fillRule="evenodd" opacity={0.16} clipPath="url(#artMarbleA)" />
       <Circle cx={30} cy={49} r={7} fill={MARBLE_COLORS.marbleShine} opacity={0.55} />
       <Circle cx={72} cy={44} r={19} fill={shade(MARBLE_COLORS.marble, -0.25)} />
+      <Path d={crescent(72, 44, 19)} fill="#3E3A5E" fillRule="evenodd" opacity={0.13} clipPath="url(#artMarbleB)" />
       <Circle cx={66} cy={38} r={5} fill={MARBLE_COLORS.marbleShine} opacity={0.55} />
     </Svg>
   );

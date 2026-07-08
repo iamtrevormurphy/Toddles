@@ -250,6 +250,41 @@ export async function playCombineSound() {
   }
 }
 
+// Play Overflow Sound - soft "too full, slides back out" whoosh (never harsh)
+export async function playOverflowSound() {
+  try {
+    if (Platform.OS === 'web') {
+      if (!audioContext) await initAudio();
+
+      if (audioContext && audioContext.state === 'running') {
+        const oscillator = audioContext.createOscillator();
+        const noteGain = audioContext.createGain();
+
+        oscillator.connect(noteGain);
+        noteGain.connect(audioContext.destination);
+
+        const now = audioContext.currentTime;
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(500, now);
+        oscillator.frequency.exponentialRampToValueAtTime(280, now + 0.25);
+
+        noteGain.gain.setValueAtTime(0.2, now);
+        noteGain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+
+        oscillator.start(now);
+        oscillator.stop(now + 0.25);
+
+        setTimeout(() => {
+          oscillator.disconnect();
+          noteGain.disconnect();
+        }, 400);
+      }
+    }
+  } catch (e) {
+    // Fail silently
+  }
+}
+
 // Play Error Sound - gentle wrong answer feedback
 export async function playErrorSound() {
   try {

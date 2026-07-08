@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
+  interpolate,
   useSharedValue,
   useAnimatedStyle,
   withSpring,
@@ -9,7 +10,8 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { MARBLE_COLORS, TOUCH } from '../../constants/theme';
+import Svg, { Circle, ClipPath, Defs, Ellipse, Path } from 'react-native-svg';
+import { MARBLE_COLORS, shade } from '../../constants/theme';
 import { selectionHaptic, tapHaptic } from '../../utils/haptics';
 
 const MARBLE_SIZE = 80;
@@ -17,11 +19,23 @@ const MARBLE_RADIUS = MARBLE_SIZE / 2;
 // Circumference for realistic rolling: rotation = distance * (360 / circumference)
 const ROTATION_FACTOR = 360 / (2 * Math.PI * MARBLE_RADIUS);
 
+const SPOT_COLOR = MARBLE_COLORS.marbleHighlight;
+const COUNTER_SPOT_COLOR = shade(MARBLE_COLORS.marble, 0.1);
+
+const circlePath = (cx, cy, r) =>
+  `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${2 * r} 0 a ${r} ${r} 0 1 0 ${-2 * r} 0 Z`;
+// Bottom crescent = marble circle minus the same circle nudged up (evenodd),
+// clipped to the marble so the offset circle's top lobe never shows.
+const CRESCENT_PATH = `${circlePath(40, 40, 40)} ${circlePath(40, 33, 40)}`;
+
 export default function Marble({
   id,
   value,
   x,
   y,
+  fromX = null, // optional spawn origin: marble mounts there and ROLLS to x/y
+  fromY = null,
+  restScale = 1, // resting size multiplier (slot marble grows toward the ring)
   onTap,
   onDragEnd,
   onDragStart,
@@ -29,16 +43,20 @@ export default function Marble({
   isActive = false,
   gazeSV = null, // optional {x, y, active} shared values — Juno watches
 }) {
-  const translateX = useSharedValue(x);
-  const translateY = useSharedValue(y);
+  const translateX = useSharedValue(fromX ?? x);
+  const translateY = useSharedValue(fromY ?? y);
   const scale = useSharedValue(1);
+  const restScaleSV = useSharedValue(restScale);
   const zIndex = useSharedValue(1);
   const rotation = useSharedValue(0);
   const startX = useSharedValue(0);
   const startY = useSharedValue(0);
-  const prevX = useRef(x);
+  const lastTX = useSharedValue(0);
+  const prevX = useRef(fromX ?? x);
 
-  // Update position when props change (split/combine animations)
+  // Update position when props change (split/combine/bump animations).
+  // Because shared values start at fromX/fromY, the mount run of this effect
+  // rolls a freshly split marble outward from its parent's position.
   useEffect(() => {
     // Calculate rolling rotation based on horizontal distance
     const deltaX = x - prevX.current;
@@ -50,6 +68,10 @@ export default function Marble({
 
     prevX.current = x;
   }, [x, y]);
+
+  useEffect(() => {
+    restScaleSV.value = withSpring(restScale, { damping: 16 });
+  }, [restScale]);
 
   // Tap gesture to split
   const tapGesture = Gesture.Tap()
@@ -71,6 +93,7 @@ export default function Marble({
     .onStart(() => {
       startX.value = translateX.value;
       startY.value = translateY.value;
+      lastTX.value = 0;
       scale.value = withSpring(1.15);
       zIndex.value = 100;
       if (gazeSV) {
@@ -85,8 +108,10 @@ export default function Marble({
     })
     .onUpdate((event) => {
       const newX = startX.value + event.translationX;
-      // Rolling animation during drag
-      rotation.value = event.translationX * ROTATION_FACTOR;
+      // Rolling during drag: delta-based so rotation ACCUMULATES — no
+      // jarring reset when a new drag starts
+      rotation.value += (event.translationX - lastTX.value) * ROTATION_FACTOR;
+      lastTX.value = event.translationX;
       translateX.value = newX;
       translateY.value = startY.value + event.translationY;
       if (gazeSV) {
@@ -143,14 +168,24 @@ export default function Marble({
     transform: [
       { translateX: translateX.value - MARBLE_SIZE / 2 },
       { translateY: translateY.value - MARBLE_SIZE / 2 },
-      { scale: scale.value },
+      { scale: scale.value * restScaleSV.value },
     ],
     zIndex: zIndex.value,
   }));
 
-  // Separate rotation style for the inner content (stripe rotates, outer shadow stays fixed)
+  // Rotation only affects the inner disc (shading and numeral stay put)
   const rotationStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotation.value}deg` }],
+  }));
+
+  // Contact ground shadow (depth policy): tight and full at rest, it
+  // shrinks/fades/separates as the marble lifts (scale springs to 1.15).
+  const shadowStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scale.value, [1, 1.15], [1, 0.35]),
+    transform: [
+      { translateY: interpolate(scale.value, [1, 1.15], [0, 9]) },
+      { scaleX: interpolate(scale.value, [1, 1.15], [1, 0.72]) },
+    ],
   }));
 
   // Pulse animation when active (being dragged over)
@@ -166,14 +201,37 @@ export default function Marble({
   return (
     <GestureDetector gesture={composedGesture}>
       <Animated.View style={[styles.marble, animatedStyle]}>
-        {/* Rotating inner content for rolling effect */}
-        <Animated.View style={[styles.marbleInner, rotationStyle]}>
-          {/* Stripe that shows rolling motion */}
-          <View style={styles.stripeContainer}>
-            <View style={styles.stripe} />
-          </View>
-          <Animated.View style={styles.marbleHighlight} />
+        {/* Contact ground shadow — belongs to the ground, never rotates */}
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, shadowStyle]}>
+          <Svg width={120} height={100} viewBox="0 0 120 100" style={styles.shadowSvg}>
+            <Ellipse cx={60} cy={84} rx={30} ry={5} fill="#3E3A5E" opacity={0.14} />
+            <Ellipse cx={60} cy={84} rx={40} ry={7} fill="#3E3A5E" opacity={0.07} />
+          </Svg>
         </Animated.View>
+
+        {/* Rotating disc with a ball-roll spot pair */}
+        <Animated.View style={[styles.marbleInner, rotationStyle]}>
+          <View style={styles.spot} />
+          <View style={styles.counterSpot} />
+        </Animated.View>
+
+        {/* Static shading: light is environmental, it never spins */}
+        <Svg width={MARBLE_SIZE} height={MARBLE_SIZE} viewBox="0 0 80 80" style={styles.shading} pointerEvents="none">
+          <Defs>
+            <ClipPath id="marbleClip">
+              <Circle cx={40} cy={40} r={40} />
+            </ClipPath>
+          </Defs>
+          <Path
+            d={CRESCENT_PATH}
+            fill="#3E3A5E"
+            fillRule="evenodd"
+            opacity={0.16}
+            clipPath="url(#marbleClip)"
+          />
+          <Ellipse cx={28} cy={22} rx={12} ry={8} fill={MARBLE_COLORS.marbleShine} opacity={0.5} />
+        </Svg>
+
         {/* Number stays upright (not rotating) */}
         <View style={styles.numberContainer}>
           <Text style={styles.marbleText}>{value}</Text>
@@ -201,48 +259,42 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: MARBLE_SIZE,
     height: MARBLE_SIZE,
-    borderRadius: MARBLE_SIZE / 2,
-    backgroundColor: MARBLE_COLORS.marble,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#3E3A5E',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    elevation: 8,
+  },
+  shadowSvg: {
+    position: 'absolute',
+    left: -20,
+    top: 0,
   },
   marbleInner: {
-    width: MARBLE_SIZE - 8,
-    height: MARBLE_SIZE - 8,
-    borderRadius: (MARBLE_SIZE - 8) / 2,
+    width: MARBLE_SIZE,
+    height: MARBLE_SIZE,
+    borderRadius: MARBLE_RADIUS,
     backgroundColor: MARBLE_COLORS.marble,
-    justifyContent: 'center',
-    alignItems: 'center',
     overflow: 'hidden',
   },
-  stripeContainer: {
+  spot: {
     position: 'absolute',
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
+    left: MARBLE_RADIUS - 11,
+    top: MARBLE_RADIUS - 15 - 11,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: SPOT_COLOR,
+    opacity: 0.55,
   },
-  stripe: {
+  counterSpot: {
     position: 'absolute',
-    width: '100%',
-    height: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    borderRadius: 4,
-  },
-  marbleHighlight: {
-    position: 'absolute',
-    top: 8,
-    left: 12,
-    width: 20,
+    left: MARBLE_RADIUS - 6,
+    top: MARBLE_RADIUS + 15 - 6,
+    width: 12,
     height: 12,
-    borderRadius: 10,
-    backgroundColor: MARBLE_COLORS.marbleShine,
-    opacity: 0.6,
+    borderRadius: 6,
+    backgroundColor: COUNTER_SPOT_COLOR,
+  },
+  shading: {
+    position: 'absolute',
   },
   numberContainer: {
     position: 'absolute',
