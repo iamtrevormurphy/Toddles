@@ -39,12 +39,18 @@ export function getRandomPosition() {
   };
 }
 
-// Get split positions (two marbles side by side)
+// Split positions: the halves burst apart along a different axis each time
+// (golden-angle sequence — deterministic variety, no repeats for ages).
+// resolveOverlaps clamps the results back onto the platform.
+let splitSeed = 0;
 export function getSplitPositions(originalX, originalY) {
-  const offset = 50;
+  const angle = ((splitSeed++ * 137.5) % 180) * (Math.PI / 180);
+  const dist = 56;
+  const dx = Math.cos(angle) * dist;
+  const dy = Math.sin(angle) * dist * 0.7; // flatten vertical spread a touch
   return [
-    { x: originalX - offset, y: originalY },
-    { x: originalX + offset, y: originalY },
+    { x: originalX - dx, y: originalY - dy },
+    { x: originalX + dx, y: originalY + dy },
   ];
 }
 

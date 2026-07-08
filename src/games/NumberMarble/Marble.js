@@ -1,9 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
+  cancelAnimation,
   interpolate,
+  useAnimatedReaction,
   useSharedValue,
   useAnimatedStyle,
+  withDecay,
+  withRepeat,
   withSpring,
   withSequence,
   withTiming,
@@ -11,16 +15,14 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Svg, { Circle, ClipPath, Defs, Ellipse, Path } from 'react-native-svg';
-import { MARBLE_COLORS, shade } from '../../constants/theme';
+import { MARBLE_COLORS, MARBLE_SPECIAL_COLOR, shade } from '../../constants/theme';
+import { StarIcon } from '../../components/icons';
 import { selectionHaptic, tapHaptic } from '../../utils/haptics';
 
 const MARBLE_SIZE = 80;
 const MARBLE_RADIUS = MARBLE_SIZE / 2;
 // Circumference for realistic rolling: rotation = distance * (360 / circumference)
 const ROTATION_FACTOR = 360 / (2 * Math.PI * MARBLE_RADIUS);
-
-const SPOT_COLOR = MARBLE_COLORS.marbleHighlight;
-const COUNTER_SPOT_COLOR = shade(MARBLE_COLORS.marble, 0.1);
 
 const circlePath = (cx, cy, r) =>
   `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${2 * r} 0 a ${r} ${r} 0 1 0 ${-2 * r} 0 Z`;
@@ -36,10 +38,13 @@ export default function Marble({
   fromX = null, // optional spawn origin: marble mounts there and ROLLS to x/y
   fromY = null,
   restScale = 1, // resting size multiplier (slot marble grows toward the ring)
+  color = MARBLE_COLORS.marble,
+  special = false, // rare honey marble: glow + star, extra fun
   onTap,
   onDragEnd,
   onDragStart,
   onDragMove,
+  onRollEnd, // (id, {x, y}) — a momentum roll came to rest
   isActive = false,
   gazeSV = null, // optional {x, y, active} shared values — Juno watches
 }) {
@@ -51,27 +56,53 @@ export default function Marble({
   const rotation = useSharedValue(0);
   const startX = useSharedValue(0);
   const startY = useSharedValue(0);
-  const lastTX = useSharedValue(0);
-  const prevX = useRef(fromX ?? x);
+  const glow = useSharedValue(0.25);
+  const rollRunId = useSharedValue(0);
+  const rollFinishedAxes = useSharedValue(0);
+
+  const bodyColor = special ? MARBLE_SPECIAL_COLOR : color;
+  const spotColor = shade(bodyColor, -0.3);
+  const counterSpotColor = shade(bodyColor, 0.14);
+  const numeralColor = special ? '#3E3A5E' : MARBLE_COLORS.marbleShine;
+
+  // ONE source of truth for rolling: any movement of the marble — drag,
+  // spring, momentum decay — spins the disc. Horizontal motion dominates the
+  // read; vertical motion contributes at half rate so the marble never
+  // slides lifelessly.
+  useAnimatedReaction(
+    () => ({ x: translateX.value, y: translateY.value }),
+    (curr, prev) => {
+      if (!prev) return;
+      rotation.value += ((curr.x - prev.x) + (curr.y - prev.y) * 0.5) * ROTATION_FACTOR;
+    }
+  );
 
   // Update position when props change (split/combine/bump animations).
   // Because shared values start at fromX/fromY, the mount run of this effect
   // rolls a freshly split marble outward from its parent's position.
   useEffect(() => {
-    // Calculate rolling rotation based on horizontal distance
-    const deltaX = x - prevX.current;
-    const rollRotation = rotation.value + (deltaX * ROTATION_FACTOR);
-
     translateX.value = withSpring(x);
     translateY.value = withSpring(y);
-    rotation.value = withSpring(rollRotation, { damping: 12, stiffness: 100 });
-
-    prevX.current = x;
   }, [x, y]);
 
   useEffect(() => {
     restScaleSV.value = withSpring(restScale, { damping: 16 });
   }, [restScale]);
+
+  // Special marbles breathe a soft honey glow
+  useEffect(() => {
+    if (special) {
+      glow.value = withRepeat(
+        withSequence(
+          withTiming(0.5, { duration: 900 }),
+          withTiming(0.25, { duration: 900 })
+        ),
+        -1,
+        true
+      );
+    }
+    return () => cancelAnimation(glow);
+  }, [special]);
 
   // Tap gesture to split
   const tapGesture = Gesture.Tap()
@@ -88,12 +119,53 @@ export default function Marble({
       }
     });
 
+  // JS-side drop resolution. The callback supports three outcomes:
+  //   null            → spring back to the prop position
+  //   {x, y}          → spring to a point (slot, merge midpoint)
+  //   {roll: {...}}   → momentum: decay along the release velocity, clamped
+  //                     to the play area; index is told where it came to rest
+  const finishDrag = (posX, posY, vx, vy) => {
+    if (!onDragEnd) return;
+    onDragEnd(id, { x: posX, y: posY }, { vx, vy }, (result) => {
+      if (result && result.roll) {
+        const { vx: rvx, vy: rvy, clampX, clampY } = result.roll;
+        rollRunId.value += 1;
+        rollFinishedAxes.value = 0;
+        const currentRoll = rollRunId.value;
+        const finishAxis = (finished) => {
+          'worklet';
+          if (!finished || currentRoll !== rollRunId.value) return;
+          rollFinishedAxes.value += 1;
+          if (rollFinishedAxes.value === 2 && onRollEnd) {
+            runOnJS(onRollEnd)(id, { x: translateX.value, y: translateY.value });
+          }
+        };
+        translateX.value = withDecay(
+          { velocity: rvx, clamp: clampX, deceleration: 0.995 },
+          finishAxis
+        );
+        translateY.value = withDecay(
+          { velocity: rvy, clamp: clampY, deceleration: 0.995 },
+          finishAxis
+        );
+      } else if (result) {
+        translateX.value = withSpring(result.x);
+        translateY.value = withSpring(result.y);
+      } else {
+        translateX.value = withSpring(x);
+        translateY.value = withSpring(y);
+      }
+    });
+  };
+
   // Pan gesture to drag
   const panGesture = Gesture.Pan()
     .onStart(() => {
+      // Grabbing a rolling marble stops its momentum
+      cancelAnimation(translateX);
+      cancelAnimation(translateY);
       startX.value = translateX.value;
       startY.value = translateY.value;
-      lastTX.value = 0;
       scale.value = withSpring(1.15);
       zIndex.value = 100;
       if (gazeSV) {
@@ -107,12 +179,7 @@ export default function Marble({
       }
     })
     .onUpdate((event) => {
-      const newX = startX.value + event.translationX;
-      // Rolling during drag: delta-based so rotation ACCUMULATES — no
-      // jarring reset when a new drag starts
-      rotation.value += (event.translationX - lastTX.value) * ROTATION_FACTOR;
-      lastTX.value = event.translationX;
-      translateX.value = newX;
+      translateX.value = startX.value + event.translationX;
       translateY.value = startY.value + event.translationY;
       if (gazeSV) {
         gazeSV.x.value = translateX.value;
@@ -125,37 +192,18 @@ export default function Marble({
         });
       }
     })
-    .onEnd(() => {
+    .onEnd((event) => {
       if (gazeSV) {
         gazeSV.active.value = 0;
       }
       scale.value = withSpring(1);
       zIndex.value = 1;
-
-      const currentPos = {
-        x: translateX.value,
-        y: translateY.value,
-      };
-
-      if (onDragEnd) {
-        runOnJS(onDragEnd)(id, currentPos, (snapPos) => {
-          if (snapPos) {
-            // Calculate roll to snap position
-            const deltaX = snapPos.x - translateX.value;
-            const rollRotation = rotation.value + (deltaX * ROTATION_FACTOR);
-            translateX.value = withSpring(snapPos.x);
-            translateY.value = withSpring(snapPos.y);
-            rotation.value = withSpring(rollRotation, { damping: 12, stiffness: 100 });
-          } else {
-            // Roll back to original position
-            const deltaX = x - translateX.value;
-            const rollRotation = rotation.value + (deltaX * ROTATION_FACTOR);
-            translateX.value = withSpring(x);
-            translateY.value = withSpring(y);
-            rotation.value = withSpring(rollRotation, { damping: 12, stiffness: 100 });
-          }
-        });
-      }
+      runOnJS(finishDrag)(
+        translateX.value,
+        translateY.value,
+        event.velocityX,
+        event.velocityY
+      );
     });
 
   // Combine both gestures - tap takes priority over pan
@@ -188,15 +236,7 @@ export default function Marble({
     ],
   }));
 
-  // Pulse animation when active (being dragged over)
-  useEffect(() => {
-    if (isActive) {
-      scale.value = withSequence(
-        withSpring(1.1),
-        withSpring(1)
-      );
-    }
-  }, [isActive]);
+  const glowStyle = useAnimatedStyle(() => ({ opacity: glow.value }));
 
   return (
     <GestureDetector gesture={composedGesture}>
@@ -209,10 +249,21 @@ export default function Marble({
           </Svg>
         </Animated.View>
 
+        {/* Special: soft breathing honey halo */}
+        {special && (
+          <Animated.View pointerEvents="none" style={[styles.halo, glowStyle]} />
+        )}
+
         {/* Rotating disc with a ball-roll spot pair */}
-        <Animated.View style={[styles.marbleInner, rotationStyle]}>
-          <View style={styles.spot} />
-          <View style={styles.counterSpot} />
+        <Animated.View style={[styles.marbleInner, rotationStyle, { backgroundColor: bodyColor }]}>
+          <View style={[styles.spot, { backgroundColor: spotColor }]} />
+          {special ? (
+            <View style={styles.starDecal}>
+              <StarIcon size={18} color="#FFFDF9" />
+            </View>
+          ) : (
+            <View style={[styles.counterSpot, { backgroundColor: counterSpotColor }]} />
+          )}
         </Animated.View>
 
         {/* Static shading: light is environmental, it never spins */}
@@ -234,7 +285,7 @@ export default function Marble({
 
         {/* Number stays upright (not rotating) */}
         <View style={styles.numberContainer}>
-          <Text style={styles.marbleText}>{value}</Text>
+          <Text style={[styles.marbleText, { color: numeralColor }]}>{value}</Text>
         </View>
       </Animated.View>
     </GestureDetector>
@@ -267,11 +318,19 @@ const styles = StyleSheet.create({
     left: -20,
     top: 0,
   },
+  halo: {
+    position: 'absolute',
+    left: -10,
+    top: -10,
+    width: MARBLE_SIZE + 20,
+    height: MARBLE_SIZE + 20,
+    borderRadius: (MARBLE_SIZE + 20) / 2,
+    backgroundColor: MARBLE_SPECIAL_COLOR,
+  },
   marbleInner: {
     width: MARBLE_SIZE,
     height: MARBLE_SIZE,
     borderRadius: MARBLE_RADIUS,
-    backgroundColor: MARBLE_COLORS.marble,
     overflow: 'hidden',
   },
   spot: {
@@ -281,7 +340,6 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: SPOT_COLOR,
     opacity: 0.55,
   },
   counterSpot: {
@@ -291,7 +349,11 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: COUNTER_SPOT_COLOR,
+  },
+  starDecal: {
+    position: 'absolute',
+    left: MARBLE_RADIUS - 9,
+    top: MARBLE_RADIUS + 15 - 9,
   },
   shading: {
     position: 'absolute',
@@ -304,7 +366,6 @@ const styles = StyleSheet.create({
   marbleText: {
     fontFamily: 'Nunito_800ExtraBold',
     fontSize: 32,
-    color: MARBLE_COLORS.marbleShine,
     textShadowColor: 'rgba(62, 58, 94, 0.3)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,

@@ -153,6 +153,20 @@ export const TANGRAM_SIDE_COLORS = Object.fromEntries(
   ])
 );
 
+// Marble body colors — variety from the accent palette (hue-distinct,
+// all read well under the ink crescent + white numeral)
+export const MARBLE_PALETTE = [
+  '#6B5B95', // dusty indigo
+  '#5FA8A0', // muted teal
+  '#E2795B', // terracotta
+  '#6C8FD4', // cornflower
+  '#D98BA3', // dusty rose
+  '#8FB26E', // moss
+];
+
+// The rare "special" marble: honey gold with a gentle glow
+export const MARBLE_SPECIAL_COLOR = '#F0C987';
+
 // Number Marble game colors — dusty indigo world
 export const MARBLE_COLORS = {
   marble: '#6B5B95',

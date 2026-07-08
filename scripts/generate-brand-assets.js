@@ -101,7 +101,32 @@ function pipSvgBody() {
   return parts.join('\n    ');
 }
 
-// App icon: full-bleed dawn gradient, Pip centered large (OS masks corners).
+// App icon: Pip's FACE, big and friendly, waving a wing — a character
+// striking a pose rather than a distant full-body. Full-bleed dawn gradient
+// (the OS masks its own corners). Reads down to 16px.
+function pipFaceSvg() {
+  const teal = CHARACTER_COLORS.teal;
+  const tealSide = shade(teal, DEPTH.sideShade);
+  return `
+    <!-- head, with 2.5D bottom band -->
+    <rect x="16" y="84" width="60" height="9" fill="${tealSide}"/>
+    <rect x="16" y="24" width="60" height="60" fill="${teal}"/>
+    <!-- crest -->
+    <path d="M 40 24 L 58 24 L 49 8 Z" fill="${CHARACTER_COLORS.terracotta}"/>
+    <!-- beak -->
+    <path d="M 16 46 L 16 62 L 2 54 Z" fill="${CHARACTER_COLORS.amber}"/>
+    <!-- waving wing, raised beside the head -->
+    <path d="M 72 62 L 90 40 L 97 47 L 79 69 Z" fill="${CHARACTER_COLORS.cornflower}"/>
+    <!-- eyes + glints -->
+    <circle cx="34" cy="48" r="5.5" fill="${CHARACTER_COLORS.ink}"/>
+    <circle cx="36" cy="46.2" r="1.7" fill="${CHARACTER_COLORS.white}"/>
+    <circle cx="58" cy="48" r="5.5" fill="${CHARACTER_COLORS.ink}"/>
+    <circle cx="60" cy="46.2" r="1.7" fill="${CHARACTER_COLORS.white}"/>
+    <!-- cheeks -->
+    <circle cx="27" cy="64" r="5" fill="${CHARACTER_COLORS.rose}" opacity="0.85"/>
+    <circle cx="65" cy="64" r="5" fill="${CHARACTER_COLORS.rose}" opacity="0.85"/>`.trim();
+}
+
 const icon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <defs>
     <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
@@ -110,8 +135,8 @@ const icon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
     </linearGradient>
   </defs>
   <rect width="1024" height="1024" fill="url(#sky)"/>
-  <g transform="translate(180, 132) scale(6.6)">
-    ${pipSvgBody()}
+  <g transform="translate(58, 56) scale(9.2)">
+    ${pipFaceSvg()}
   </g>
 </svg>`;
 
@@ -125,8 +150,8 @@ const splash = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
 
 const outDir = path.join(root, 'assets', 'brand');
 fs.mkdirSync(outDir, { recursive: true });
-fs.writeFileSync(path.join(outDir, 'icon.svg'), icon);
-fs.writeFileSync(path.join(outDir, 'splash.svg'), splash);
+fs.writeFileSync(path.join(outDir, 'icon.svg'), `${icon}\n`);
+fs.writeFileSync(path.join(outDir, 'splash.svg'), `${splash}\n`);
 console.log('Wrote assets/brand/icon.svg and assets/brand/splash.svg');
 console.log('Rasterize with:');
 console.log('  qlmanage -t -s 1024 assets/brand/icon.svg -o assets/brand/');

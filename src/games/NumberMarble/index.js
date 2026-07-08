@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
-import { ANIMATION, COLORS, MARBLE_COLORS, RADII, SHADOWS, TYPE } from '../../constants/theme';
+import { ANIMATION, COLORS, MARBLE_COLORS, MARBLE_PALETTE, RADII, SHADOWS, TYPE } from '../../constants/theme';
 import {
   playSplitSound,
   playCombineSound,
@@ -66,6 +66,19 @@ export default function NumberMarble({ navigation }) {
     y: Math.min(Math.max(pos.y, PLAY_AREA.y + 40), PLAY_AREA.y + PLAY_AREA.height - 40),
   });
 
+  const insidePlayArea = (pos) =>
+    pos.x >= PLAY_AREA.x + 40 &&
+    pos.x <= PLAY_AREA.x + PLAY_AREA.width - 40 &&
+    pos.y >= PLAY_AREA.y + 40 &&
+    pos.y <= PLAY_AREA.y + PLAY_AREA.height - 40;
+
+  // New marbles get a color from the palette (round-robin, deterministic)
+  // and very occasionally come out SPECIAL — a honey marble with a glow.
+  const rollNewMarbleTraits = () => ({
+    color: MARBLE_PALETTE[marbleIdRef.current % MARBLE_PALETTE.length],
+    special: Math.random() < 0.07,
+  });
+
   // Juno watches the dragged marble through these shared values (written in
   // Marble.js's pan worklet — zero React renders per frame).
   const gaze = {
@@ -90,6 +103,7 @@ export default function NumberMarble({ navigation }) {
       value,
       x: positions[index].x,
       y: positions[index].y,
+      ...rollNewMarbleTraits(),
     }));
     setMarbles(resolveOverlaps(newMarbles));
     setIsDancing(false);
@@ -117,6 +131,7 @@ export default function NumberMarble({ navigation }) {
           y: positions[0].y,
           fromX: marble.x,
           fromY: marble.y,
+          ...rollNewMarbleTraits(),
         },
         {
           id: marbleIdRef.current++,
@@ -125,10 +140,15 @@ export default function NumberMarble({ navigation }) {
           y: positions[1].y,
           fromX: marble.x,
           fromY: marble.y,
+          ...rollNewMarbleTraits(),
         },
       ];
 
       playSplitSound();
+      // A special marble appearing is a little event — Juno hops
+      if (newMarbles.some((m) => m.special)) {
+        characterRef.current?.react('hop');
+      }
 
       return resolveOverlaps([...prev.filter((m) => m.id !== marbleId), ...newMarbles]);
     });
@@ -240,9 +260,20 @@ export default function NumberMarble({ navigation }) {
     characterRef.current?.react('nod');
   };
 
+  // A momentum roll came to rest: record the position and bump neighbors
+  const handleRollEnd = useCallback((marbleId, pos) => {
+    setMarbles((prev) =>
+      resolveOverlaps(
+        prev.map((m) => (m.id === marbleId ? { ...m, x: pos.x, y: pos.y } : m)),
+        PLAY_AREA,
+        { pinnedId: marbleId }
+      )
+    );
+  }, []);
+
   // Handle marble drag end
   const handleDragEnd = useCallback(
-    (marbleId, position, callback) => {
+    (marbleId, position, velocity, callback) => {
       setDraggedMarbleId(null);
       setIsTargetHighlighted(false);
 
@@ -300,8 +331,32 @@ export default function NumberMarble({ navigation }) {
         return;
       }
 
-      // No valid drop - return to original position
-      callback(null);
+      // --- Open-board release: keep rolling with the throw ---
+      if (insidePlayArea(position)) {
+        // Cap the throw so a big fling can't slam the walls
+        const speed = Math.hypot(velocity.vx, velocity.vy);
+        const capped = speed > 1100 ? 1100 / speed : 1;
+        callback({
+          roll: {
+            vx: velocity.vx * capped,
+            vy: velocity.vy * capped,
+            clampX: [PLAY_AREA.x + 40, PLAY_AREA.x + PLAY_AREA.width - 40],
+            clampY: [PLAY_AREA.y + 40, PLAY_AREA.y + PLAY_AREA.height - 40],
+          },
+        });
+        return;
+      }
+
+      // Released off the board entirely: toss it back on
+      const dropPos = clampToPlayArea(position);
+      callback(dropPos);
+      setMarbles((prev) =>
+        resolveOverlaps(
+          prev.map((m) => (m.id === marbleId ? { ...m, x: dropPos.x, y: dropPos.y } : m)),
+          PLAY_AREA,
+          { pinnedId: marbleId }
+        )
+      );
     },
     [marbles, currentLevel.target]
   );
@@ -372,10 +427,13 @@ export default function NumberMarble({ navigation }) {
               ? 0.62 + 0.38 * Math.min(1, marble.value / currentLevel.target)
               : 1
           }
+          color={marble.color}
+          special={marble.special}
           onTap={handleMarbleTap}
           onDragStart={handleDragStart}
           onDragMove={handleDragMove}
           onDragEnd={handleDragEnd}
+          onRollEnd={handleRollEnd}
           isActive={draggedMarbleId !== null && draggedMarbleId !== marble.id}
           gazeSV={gaze}
         />
