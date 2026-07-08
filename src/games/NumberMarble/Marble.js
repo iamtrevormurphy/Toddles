@@ -140,12 +140,14 @@ export default function Marble({
             runOnJS(onRollEnd)(id, { x: translateX.value, y: translateY.value });
           }
         };
+        // Real-marble glide: a high deceleration constant means long playful
+        // rolls that slow gradually; rubber-band adds a soft bounce off walls.
         translateX.value = withDecay(
-          { velocity: rvx, clamp: clampX, deceleration: 0.995 },
+          { velocity: rvx, clamp: clampX, deceleration: 0.9985, rubberBandEffect: true, rubberBandFactor: 0.9 },
           finishAxis
         );
         translateY.value = withDecay(
-          { velocity: rvy, clamp: clampY, deceleration: 0.995 },
+          { velocity: rvy, clamp: clampY, deceleration: 0.9985, rubberBandEffect: true, rubberBandFactor: 0.9 },
           finishAxis
         );
       } else if (result) {

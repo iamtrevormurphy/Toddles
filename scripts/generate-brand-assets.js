@@ -117,14 +117,13 @@ function pipFaceSvg() {
     <path d="M 16 46 L 16 62 L 2 54 Z" fill="${CHARACTER_COLORS.amber}"/>
     <!-- waving wing, raised beside the head -->
     <path d="M 72 62 L 90 40 L 97 47 L 79 69 Z" fill="${CHARACTER_COLORS.cornflower}"/>
-    <!-- eyes + glints -->
+    <!-- left eye open + glint, right eye WINKING (happy closed arc) -->
     <circle cx="34" cy="48" r="5.5" fill="${CHARACTER_COLORS.ink}"/>
     <circle cx="36" cy="46.2" r="1.7" fill="${CHARACTER_COLORS.white}"/>
-    <circle cx="58" cy="48" r="5.5" fill="${CHARACTER_COLORS.ink}"/>
-    <circle cx="60" cy="46.2" r="1.7" fill="${CHARACTER_COLORS.white}"/>
-    <!-- cheeks -->
+    <path d="M 52 48 Q 58 53.5 64 48" stroke="${CHARACTER_COLORS.ink}" stroke-width="3.4" stroke-linecap="round" fill="none"/>
+    <!-- cheeks (the winking side blushes a touch bigger) -->
     <circle cx="27" cy="64" r="5" fill="${CHARACTER_COLORS.rose}" opacity="0.85"/>
-    <circle cx="65" cy="64" r="5" fill="${CHARACTER_COLORS.rose}" opacity="0.85"/>`.trim();
+    <circle cx="64" cy="63" r="5.8" fill="${CHARACTER_COLORS.rose}" opacity="0.85"/>`.trim();
 }
 
 const icon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">

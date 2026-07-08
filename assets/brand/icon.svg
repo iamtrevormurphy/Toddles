@@ -16,13 +16,12 @@
     <path d="M 16 46 L 16 62 L 2 54 Z" fill="#EDB95F"/>
     <!-- waving wing, raised beside the head -->
     <path d="M 72 62 L 90 40 L 97 47 L 79 69 Z" fill="#6C8FD4"/>
-    <!-- eyes + glints -->
+    <!-- left eye open + glint, right eye WINKING (happy closed arc) -->
     <circle cx="34" cy="48" r="5.5" fill="#3E3A5E"/>
     <circle cx="36" cy="46.2" r="1.7" fill="#FFFDF9"/>
-    <circle cx="58" cy="48" r="5.5" fill="#3E3A5E"/>
-    <circle cx="60" cy="46.2" r="1.7" fill="#FFFDF9"/>
-    <!-- cheeks -->
+    <path d="M 52 48 Q 58 53.5 64 48" stroke="#3E3A5E" stroke-width="3.4" stroke-linecap="round" fill="none"/>
+    <!-- cheeks (the winking side blushes a touch bigger) -->
     <circle cx="27" cy="64" r="5" fill="#D98BA3" opacity="0.85"/>
-    <circle cx="65" cy="64" r="5" fill="#D98BA3" opacity="0.85"/>
+    <circle cx="64" cy="63" r="5.8" fill="#D98BA3" opacity="0.85"/>
   </g>
 </svg>

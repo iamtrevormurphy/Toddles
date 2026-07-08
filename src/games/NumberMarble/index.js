@@ -335,7 +335,7 @@ export default function NumberMarble({ navigation }) {
       if (insidePlayArea(position)) {
         // Cap the throw so a big fling can't slam the walls
         const speed = Math.hypot(velocity.vx, velocity.vy);
-        const capped = speed > 1100 ? 1100 / speed : 1;
+        const capped = speed > 1400 ? 1400 / speed : 1;
         callback({
           roll: {
             vx: velocity.vx * capped,

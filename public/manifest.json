@@ -4,8 +4,8 @@
   "description": "Educational games for toddlers ages 2-6",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#FFF8E7",
-  "theme_color": "#4ECDC4",
+  "background_color": "#F7F1E8",
+  "theme_color": "#E39473",
   "orientation": "portrait",
   "icons": [
     {
