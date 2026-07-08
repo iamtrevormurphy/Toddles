@@ -13,32 +13,18 @@ const { width } = Dimensions.get('window');
 
 const games = [
   {
-    id: 'bubble-pop',
-    title: '🫧',
-    subtitle: 'Bubbles',
-    color: COLORS.bubbleBlue,
-    screen: 'BubblePop',
-  },
-  {
-    id: 'shape-sorter',
-    title: '🔷',
-    subtitle: 'Shapes',
+    id: 'tangram',
+    title: '🧩',
+    subtitle: 'Tangram',
     color: COLORS.bubblePurple,
-    screen: 'ShapeSorter',
+    screen: 'Tangram',
   },
   {
-    id: 'color-match',
-    title: '🎨',
-    subtitle: 'Colors',
-    color: COLORS.bubbleOrange,
-    screen: 'ColorMatch',
-  },
-  {
-    id: 'number-catch',
-    title: '🐻',
-    subtitle: 'Numbers',
-    color: COLORS.bubbleGreen,
-    screen: 'NumberCatch',
+    id: 'number-marble',
+    title: '🔢',
+    subtitle: 'Marbles',
+    color: COLORS.bubbleBlue,
+    screen: 'NumberMarble',
   },
 ];
 

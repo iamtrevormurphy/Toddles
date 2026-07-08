@@ -56,3 +56,40 @@ export const GAME = {
   maxBubbles: 12,
   celebrationThreshold: 10, // Celebrate every 10 pops
 };
+
+// Tangram game colors - bright rainbow colors like classic tangram sets
+export const TANGRAM_COLORS = {
+  largeTriangle1: '#FF3B30', // Bright red
+  largeTriangle2: '#FFCC00', // Golden yellow
+  mediumTriangle: '#34C759', // Bright green
+  smallTriangle1: '#007AFF', // Bright blue
+  smallTriangle2: '#5856D6', // Purple
+  square: '#FF9500',         // Orange
+  parallelogram: '#00C7BE',  // Cyan/Teal
+  boardBackground: '#F5F0E8',
+  targetOutline: '#D4C8B8',
+  snapHighlight: '#34C759',
+};
+
+// Number Marble game colors
+export const MARBLE_COLORS = {
+  marble: '#5C7AEA',         // Blue marble base
+  marbleHighlight: '#8FA4F0',
+  marbleShine: '#FFFFFF',
+  targetSlot: '#E8E8E8',
+  targetSlotActive: '#C7F5C7',
+  characterBody: '#FFB347',  // Orange bear
+  characterFace: '#FFFFFF',
+  playArea: '#F0F7FF',
+};
+
+// Extended animation timings
+export const ANIMATION = {
+  snapDuration: 200,
+  splitDuration: 300,
+  combineDuration: 250,
+  danceDuration: 1000,
+  confettiDuration: 800,
+  hintPulseDuration: 600,
+  shakeWrongDuration: 400,
+};
