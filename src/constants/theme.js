@@ -143,6 +143,10 @@ export const TANGRAM_COLORS = {
   boardBackground: '#F3EBDD', // pale stone platform top
   targetOutline: '#C9BBA8',
   snapHighlight: '#7FA98C',
+  // Advanced-mode whole-picture hint — light lavender (~shade(bubblePurple, -0.5)),
+  // hue-distant from every piece color so it hints no shape. Must stay an opaque
+  // hex: seamless silhouette rendering relies on same-color stroke overdraw.
+  silhouette: '#D4CCE8',
 };
 
 // Precomputed 2.5D side-face colors so render code never computes per frame.

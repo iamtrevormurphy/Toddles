@@ -8,12 +8,7 @@ import { DifficultyDots } from '../../components/icons';
 import PuzzlePreview from './PuzzlePreview';
 import { getPuzzlesBySection } from './puzzles';
 
-const SECTIONS = [
-  { id: 'numbers', title: 'Numbers' },
-  { id: 'animals', title: 'Animals' },
-];
-
-export default function PuzzlePicker({ onSelect, onBack }) {
+export default function PuzzlePicker({ section, title, onSelect, onBack }) {
   const { width } = useWindowDimensions();
   const cardSize = (width - 16 * 4) / 3;
 
@@ -22,31 +17,26 @@ export default function PuzzlePicker({ onSelect, onBack }) {
       <GradientBackground name="dusk" />
       <BackButton onPress={onBack} />
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>Pick a picture!</Text>
-        {SECTIONS.map((section) => (
-          <View key={section.id}>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
-            <View style={styles.grid}>
-              {getPuzzlesBySection(section.id).map((puzzle) => (
-                <TouchableOpacity
-                  key={puzzle.id}
-                  style={[styles.card, { width: cardSize }]}
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    tapHaptic();
-                    onSelect(puzzle.id);
-                  }}
-                >
-                  <PuzzlePreview puzzle={puzzle} size={cardSize - 24} extruded />
-                  <Text style={styles.cardName}>{puzzle.name}</Text>
-                  <View style={styles.cardDots}>
-                    <DifficultyDots level={puzzle.difficulty} />
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        ))}
+        <Text style={styles.title}>{title}</Text>
+        <View style={styles.grid}>
+          {getPuzzlesBySection(section).map((puzzle) => (
+            <TouchableOpacity
+              key={puzzle.id}
+              style={[styles.card, { width: cardSize }]}
+              activeOpacity={0.7}
+              onPress={() => {
+                tapHaptic();
+                onSelect(puzzle.id);
+              }}
+            >
+              <PuzzlePreview puzzle={puzzle} size={cardSize - 24} extruded />
+              <Text style={styles.cardName}>{puzzle.name}</Text>
+              <View style={styles.cardDots}>
+                <DifficultyDots level={puzzle.difficulty} />
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
       </ScrollView>
     </View>
   );
@@ -65,14 +55,7 @@ const styles = StyleSheet.create({
     ...TYPE.title,
     color: COLORS.textDark,
     textAlign: 'center',
-    marginBottom: 8,
-  },
-  sectionTitle: {
-    ...TYPE.heading,
-    color: COLORS.textLight,
-    marginTop: 20,
-    marginBottom: 12,
-    marginLeft: 4,
+    marginBottom: 20,
   },
   grid: {
     flexDirection: 'row',

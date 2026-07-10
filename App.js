@@ -53,7 +53,9 @@ export default function App() {
             }}
           >
             <Stack.Screen name="Home" component={HomeScreen} />
-            <Stack.Screen name="Tangram" component={Tangram} />
+            <Stack.Screen name="TangramNumbers" component={Tangram} initialParams={{ mode: 'numbers' }} />
+            <Stack.Screen name="TangramLetters" component={Tangram} initialParams={{ mode: 'letters' }} />
+            <Stack.Screen name="TangramAnimals" component={Tangram} initialParams={{ mode: 'animals' }} />
             <Stack.Screen name="NumberMarble" component={NumberMarble} />
             {__DEV__ && (
               <Stack.Screen

@@ -12,8 +12,10 @@ import { Companion } from '../characters';
 import PuzzlePreview from '../games/Tangram/PuzzlePreview';
 import { getPuzzleById } from '../games/Tangram/puzzles';
 
-// Tangram card art: the bird puzzle IS Pip's silhouette — the brand loop.
+// Animals card art: the bird puzzle IS Pip's silhouette — the brand loop.
 const birdPuzzle = getPuzzleById('bird');
+const numberPuzzle = getPuzzleById('number-2');
+const letterPuzzle = getPuzzleById('letter-a');
 
 const circlePath = (cx, cy, r) =>
   `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${2 * r} 0 a ${r} ${r} 0 1 0 ${-2 * r} 0 Z`;
@@ -42,7 +44,7 @@ function MarblesArt({ size }) {
   );
 }
 
-function GameCard({ title, art, tint, onPress }) {
+function GameCard({ title, kicker, art, tint, onPress }) {
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -60,6 +62,7 @@ function GameCard({ title, art, tint, onPress }) {
     >
       <Animated.View style={[styles.gameCard, animatedStyle]}>
         <View style={[styles.artWell, { backgroundColor: tint }]}>{art}</View>
+        {kicker && <Text style={styles.gameKicker}>{kicker}</Text>}
         <Text style={styles.gameTitle}>{title}</Text>
       </Animated.View>
     </Pressable>
@@ -83,10 +86,25 @@ export default function HomeScreen({ navigation }) {
 
       <View style={styles.gamesGrid}>
         <GameCard
-          title="Tangram"
+          title="Numbers"
+          kicker="Tangram"
+          tint="rgba(240, 201, 135, 0.18)"
+          art={<PuzzlePreview puzzle={numberPuzzle} size={96} />}
+          onPress={() => navigation.navigate('TangramNumbers')}
+        />
+        <GameCard
+          title="Letters"
+          kicker="Tangram"
+          tint="rgba(169, 155, 209, 0.16)"
+          art={<PuzzlePreview puzzle={letterPuzzle} size={96} />}
+          onPress={() => navigation.navigate('TangramLetters')}
+        />
+        <GameCard
+          title="Animals"
+          kicker="Tangram"
           tint="rgba(95, 168, 160, 0.14)"
           art={<PuzzlePreview puzzle={birdPuzzle} size={96} />}
-          onPress={() => navigation.navigate('Tangram')}
+          onPress={() => navigation.navigate('TangramAnimals')}
         />
         <GameCard
           title="Marbles"
@@ -147,6 +165,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
+  },
+  gameKicker: {
+    ...TYPE.label,
+    color: COLORS.textLight,
   },
   gameTitle: {
     ...TYPE.heading,

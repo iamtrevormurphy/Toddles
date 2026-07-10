@@ -33,7 +33,7 @@ const PLATFORM_DEPTH = 12;
 const HINT_DELAY_MS = 12000;
 const HINT_DURATION_MS = 2500;
 
-export default function GameScreen({ puzzle, onBack, onNext, onPickMore }) {
+export default function GameScreen({ puzzle, onBack, onNext, onPickMore, renderMode = 'basic' }) {
   const { width, height } = useWindowDimensions();
 
   // Placements is set the moment a drop is accepted (drives snapping logic and
@@ -255,6 +255,7 @@ export default function GameScreen({ puzzle, onBack, onNext, onPickMore }) {
             filledSlotIds={settledSlotIds}
             size={boardSize}
             viewBox={`${frame.originX} ${frame.originY} ${frame.span} ${frame.span}`}
+            renderMode={renderMode}
           />
         </View>
       </Animated.View>
