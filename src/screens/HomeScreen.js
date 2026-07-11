@@ -108,6 +108,7 @@ export default function HomeScreen({ navigation }) {
         />
         <GameCard
           title="Marbles"
+          kicker="Math"
           tint="rgba(107, 91, 149, 0.12)"
           art={<MarblesArt size={96} />}
           onPress={() => navigation.navigate('NumberMarble')}
