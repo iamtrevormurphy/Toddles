@@ -44,6 +44,26 @@ function MarblesArt({ size }) {
   );
 }
 
+// Path-Maker card art: a placeholder L-shaped path from a small character
+// to a flag — swap for real brand art once the game's visual polish phase
+// lands.
+function PathMakerArt({ size }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 100 100">
+      <Path
+        d="M50 82 L50 34 L74 34"
+        stroke={COLORS.bubbleOrange}
+        strokeWidth={8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <Circle cx={50} cy={82} r={8} fill={MARBLE_COLORS.marble} />
+      <Path d="M74 22 L88 34 L74 46 Z" fill={shade(MARBLE_COLORS.marble, -0.25)} />
+    </Svg>
+  );
+}
+
 function GameCard({ title, kicker, art, tint, onPress }) {
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({
@@ -112,6 +132,13 @@ export default function HomeScreen({ navigation }) {
           tint="rgba(107, 91, 149, 0.12)"
           art={<MarblesArt size={96} />}
           onPress={() => navigation.navigate('NumberMarble')}
+        />
+        <GameCard
+          title="Path-Maker"
+          kicker="Logic"
+          tint="rgba(217, 139, 163, 0.14)"
+          art={<PathMakerArt size={96} />}
+          onPress={() => navigation.navigate('PathMaker')}
         />
       </View>
     </SafeAreaView>
