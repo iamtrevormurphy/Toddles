@@ -23,8 +23,13 @@ export const PATHMAKER_LEVELS = [
       ],
     },
     start: { x: 0, y: 2, facing: 'N' },
-    // Up twice, turn to face the goal, across twice.
-    program: ['step', 'step', 'turnRight', 'step', 'step'],
+    // Up twice, turn to face the goal, across twice. Unused by gameplay —
+    // the child builds their own program — kept for a future hint/solver
+    // system (Phase 6).
+    solution: ['step', 'step', 'turnRight', 'step', 'step'],
+    // Visible track capacity, a difficulty lever independent of the
+    // solution's own length.
+    slotCount: 5,
   },
 ];
 

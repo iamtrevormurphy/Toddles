@@ -50,6 +50,24 @@ export function RefreshIcon({ size = 24, color = COLORS.textDark }) {
   );
 }
 
+// Broom: sweep the track clean. Distinct from RefreshIcon (which resets a
+// whole level) — this only clears the child's in-progress program.
+export function BroomIcon({ size = 24, color = COLORS.textDark }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d="M18 3 L10.5 12.5" stroke={color} strokeWidth={2.6} strokeLinecap="round" fill="none" />
+      <Path d="M7 12 L14 12 L16.5 18 L4.5 18 Z" fill={color} />
+      <Path
+        d="M6.5 18 L5.5 21.5 M9.5 18 L9 21.5 M12.5 18 L13 21.5 M15 18 L16 21.5"
+        stroke={color}
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        fill="none"
+      />
+    </Svg>
+  );
+}
+
 // Four-point sparkle star (replaces the old ✦ text glyph)
 export function StarIcon({ size = 20, color = COLORS.celebration }) {
   return (

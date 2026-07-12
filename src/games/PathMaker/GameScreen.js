@@ -1,60 +1,46 @@
 import React, { useRef, useState } from 'react';
-import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
+import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
-import { COLORS, RADII, SHADOWS, SPACING, TYPE } from '../../constants/theme';
+import { COLORS, SHADOWS, SPACING, TYPE } from '../../constants/theme';
+import { BroomIcon } from '../../components/icons';
 import BackButton from '../../components/BackButton';
 import GradientBackground from '../../components/GradientBackground';
 import PrimaryButton from '../../components/PrimaryButton';
 import { executeProgram } from './executeProgram';
 import Board, { tileCenter } from './Board';
 import Character, { FACING_DEGREES } from './Character';
+import Palette, { palettePixelWidth } from './Palette';
+import Track from './Track';
+import GhostTile from './GhostTile';
+import { computeSlotCenters, nearestInsertionIndex, trackPixelWidth, TILE_SIZE } from './trackLayout';
 
 // Deliberate, unhurried pacing so a 4-year-old can map each tile to the
 // character's action in real time — the single most important mechanic
 // in the whole game.
 const STEP_DURATION = 900;
 
-function InstructionIcon({ type, size = 30, color = COLORS.white }) {
-  const props = { stroke: color, strokeWidth: 3, strokeLinecap: 'round', strokeLinejoin: 'round', fill: 'none' };
-  if (type === 'step') {
-    return (
-      <Svg width={size} height={size} viewBox="0 0 24 24">
-        <Path d="M12 20 L12 5 M6 11 L12 5 L18 11" {...props} />
-      </Svg>
-    );
-  }
-  if (type === 'turnRight') {
-    return (
-      <Svg width={size} height={size} viewBox="0 0 24 24">
-        <Path d="M5 8 A7 7 0 1 1 5 17" {...props} />
-        <Path d="M2 14 L5 18 L9 15" {...props} />
-      </Svg>
-    );
-  }
-  if (type === 'turnLeft') {
-    return (
-      <Svg width={size} height={size} viewBox="0 0 24 24">
-        <Path d="M19 8 A7 7 0 1 0 19 17" {...props} />
-        <Path d="M22 14 L19 18 L15 15" {...props} />
-      </Svg>
-    );
-  }
-  // hop
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Circle cx={12} cy={7} r={4} fill={color} />
-      <Path d="M4 19 L20 19" {...props} />
-    </Svg>
-  );
-}
+// Layout constants for the track/palette area — one shared coordinate
+// origin for slot centers, palette master positions, and the ghost tile,
+// so a spawned tile can snap from one row into the other without any
+// coordinate-space translation.
+const ROW_GAP = SPACING[4];
+const TRACK_ROW_Y = TILE_SIZE / 2;
+const PALETTE_ROW_Y = TILE_SIZE + ROW_GAP + TILE_SIZE / 2;
+const OFF_TRACK_PADDING = 60;
 
 export default function GameScreen({ level, navigation }) {
   const [phase, setPhase] = useState('editing'); // editing | running | success | bug
   const [activeIndex, setActiveIndex] = useState(null);
 
+  const [track, setTrack] = useState([]); // [{id, type}]
+  const [ghostType, setGhostType] = useState(null);
+  const [draggingTrackId, setDraggingTrackId] = useState(null);
+  const [previewIndex, setPreviewIndex] = useState(null);
+
   const timersRef = useRef([]);
   const rotationTarget = useRef(FACING_DEGREES[level.start.facing]);
+  const nextTileId = useRef(0);
+  const makeId = () => `t${nextTileId.current++}`;
 
   const startCenter = tileCenter(level.start.x, level.start.y);
   const cx = useSharedValue(startCenter.x);
@@ -62,9 +48,92 @@ export default function GameScreen({ level, navigation }) {
   const rotation = useSharedValue(rotationTarget.current);
   const lift = useSharedValue(0);
 
+  const ghostSV = { x: useSharedValue(0), y: useSharedValue(0), opacity: useSharedValue(0) };
+
+  const slotCenters = computeSlotCenters(level.slotCount);
+  const interactive = phase === 'editing' || phase === 'success';
+
   const later = (fn, ms) => {
     timersRef.current.push(setTimeout(fn, ms));
   };
+
+  const isOnTrackY = (y) => y >= TRACK_ROW_Y - OFF_TRACK_PADDING && y <= TRACK_ROW_Y + OFF_TRACK_PADDING;
+
+  // --- Palette-origin drag (spawning a new tile) ---
+
+  const handleSpawnStart = (type) => {
+    setGhostType(type);
+    // No preview gap until the first move event reports a real position —
+    // avoids flashing a gap at an arbitrary index before the finger moves.
+    setPreviewIndex(null);
+  };
+
+  const handleGhostMove = ({ x }) => {
+    const idx = nearestInsertionIndex(x, slotCenters, null, track);
+    setPreviewIndex((prev) => (prev === idx ? prev : idx));
+  };
+
+  const handleGhostEnd = ({ x, y }, callback) => {
+    const idx = nearestInsertionIndex(x, slotCenters, null, track);
+    const hasRoom = track.length < level.slotCount;
+
+    if (isOnTrackY(y) && hasRoom) {
+      callback({ snap: { x: slotCenters[idx], y: TRACK_ROW_Y } });
+      const newTile = { id: makeId(), type: ghostType };
+      setTrack((prev) => {
+        const next = [...prev];
+        next.splice(idx, 0, newTile);
+        return next;
+      });
+      later(() => setGhostType(null), 120);
+    } else {
+      callback(null); // no snap → DraggableTile fades the ghost out
+      setGhostType(null);
+    }
+    setPreviewIndex(null);
+  };
+
+  // --- Track-origin drag (reorder / remove) ---
+
+  const handleDragStart = (id) => {
+    setDraggingTrackId(id);
+  };
+
+  const handleDragMove = (id, { x }) => {
+    const idx = nearestInsertionIndex(x, slotCenters, id, track);
+    setPreviewIndex((prev) => (prev === idx ? prev : idx));
+  };
+
+  const handleDragEnd = (id, { x, y }, callback) => {
+    if (isOnTrackY(y)) {
+      const idx = nearestInsertionIndex(x, slotCenters, id, track);
+      callback({ snap: { x: slotCenters[idx] } });
+      setTrack((prev) => {
+        const tile = prev.find((t) => t.id === id);
+        const rest = prev.filter((t) => t.id !== id);
+        const next = [...rest];
+        next.splice(idx, 0, tile);
+        return next;
+      });
+    } else {
+      callback({ remove: true });
+      // track isn't mutated yet — handleTileRemoved does that once the
+      // tile's own shrink/fade animation finishes.
+    }
+    setDraggingTrackId(null);
+    setPreviewIndex(null);
+  };
+
+  const handleTileRemoved = (id) => {
+    setTrack((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const handleClear = () => {
+    if (!interactive) return;
+    setTrack([]);
+  };
+
+  // --- Execution (unchanged from Phase 1 except reading `track`) ---
 
   const goToPose = (pose, duration = STEP_DURATION) => {
     const center = tileCenter(pose.x, pose.y);
@@ -119,7 +188,8 @@ export default function GameScreen({ level, navigation }) {
     setPhase('running');
     setActiveIndex(null);
 
-    const { steps, outcome, failIndex } = executeProgram(level.board, level.start, level.program);
+    const tiles = track.map((t) => t.type);
+    const { steps, outcome, failIndex } = executeProgram(level.board, level.start, tiles);
 
     // Every Play press starts fresh from the level's start pose — snap
     // instantly (no tween) so replays don't glide from wherever the last
@@ -147,9 +217,7 @@ export default function GameScreen({ level, navigation }) {
         return;
       }
 
-      // 'incomplete' has no tile to pulse yet (no track-slot UI in Phase
-      // 1) — leave activeIndex on the last executed step instead.
-      if (outcome !== 'incomplete') setActiveIndex(failIndex);
+      setActiveIndex(failIndex);
       setPhase('bug');
 
       later(() => {
@@ -161,6 +229,12 @@ export default function GameScreen({ level, navigation }) {
       }, 700);
     }, steps.length * STEP_DURATION + 100);
   };
+
+  const highlightIndex = phase === 'running' ? activeIndex : null;
+  const pulseIndex = phase === 'bug' && activeIndex != null && activeIndex < level.slotCount ? activeIndex : null;
+
+  const trackAreaWidth = Math.max(trackPixelWidth(level.slotCount), palettePixelWidth());
+  const trackAreaHeight = PALETTE_ROW_Y + TILE_SIZE / 2;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -175,25 +249,48 @@ export default function GameScreen({ level, navigation }) {
 
         {phase === 'success' && <Text style={styles.feedback}>Goal reached!</Text>}
 
-        <View style={styles.programRow}>
-          {level.program.map((type, i) => (
-            <View
-              key={i}
-              style={[
-                styles.instructionTile,
-                activeIndex === i && styles.instructionTileActive,
-              ]}
-            >
-              <InstructionIcon type={type} color={activeIndex === i ? COLORS.white : COLORS.textDark} />
-            </View>
-          ))}
+        <View style={[styles.trackArea, { width: trackAreaWidth, height: trackAreaHeight }]}>
+          <Track
+            slotCenters={slotCenters}
+            rowY={TRACK_ROW_Y}
+            track={track}
+            previewIndex={previewIndex}
+            draggingId={draggingTrackId}
+            disabled={!interactive}
+            highlightIndex={highlightIndex}
+            pulseIndex={pulseIndex}
+            onDragStart={handleDragStart}
+            onDragMove={handleDragMove}
+            onDragEnd={handleDragEnd}
+            onRemoved={handleTileRemoved}
+          />
+          <Palette
+            rowY={PALETTE_ROW_Y}
+            disabled={!interactive}
+            ghostSV={ghostSV}
+            onSpawnStart={handleSpawnStart}
+            onGhostMove={handleGhostMove}
+            onGhostEnd={handleGhostEnd}
+          />
+          <GhostTile type={ghostType} ghostSV={ghostSV} />
         </View>
 
-        <PrimaryButton
-          label={phase === 'running' ? 'Running…' : 'Play'}
-          onPress={handlePlay}
-          style={phase === 'running' && styles.buttonDisabled}
-        />
+        <View style={styles.controlsRow}>
+          <TouchableOpacity
+            style={[styles.broomButton, !interactive && styles.buttonDisabled]}
+            onPress={handleClear}
+            disabled={!interactive}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <BroomIcon size={26} color={COLORS.textDark} />
+          </TouchableOpacity>
+
+          <PrimaryButton
+            label={phase === 'running' ? 'Running…' : 'Play'}
+            onPress={handlePlay}
+            style={phase === 'running' && styles.buttonDisabled}
+          />
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -216,22 +313,22 @@ const styles = StyleSheet.create({
     ...TYPE.heading,
     color: COLORS.success,
   },
-  programRow: {
-    flexDirection: 'row',
-    gap: SPACING[1],
+  trackArea: {
+    position: 'relative',
   },
-  instructionTile: {
-    width: 56,
-    height: 56,
-    borderRadius: RADII.md,
+  controlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[3],
+  },
+  broomButton: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: COLORS.white,
     alignItems: 'center',
     justifyContent: 'center',
     ...SHADOWS.card,
-  },
-  instructionTileActive: {
-    backgroundColor: COLORS.bubbleOrange,
-    transform: [{ scale: 1.08 }],
   },
   buttonDisabled: {
     opacity: 0.6,
