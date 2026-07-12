@@ -148,6 +148,17 @@ run('level data sanity: PATHMAKER_LEVELS entries are well-formed', () => {
   }
 });
 
+run('every level\'s solution actually solves that level', () => {
+  for (const level of PATHMAKER_LEVELS) {
+    const result = executeProgram(level.board, level.start, level.solution);
+    assert.strictEqual(
+      result.outcome,
+      'success',
+      `level ${level.id}: authored solution does not reach the goal (outcome: ${result.outcome}, failIndex: ${result.failIndex})`
+    );
+  }
+});
+
 run('trackLayout: nearestInsertionIndex resolves start/middle/end/empty', () => {
   const centers = computeSlotCenters(5);
   const track = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];

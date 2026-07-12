@@ -1,17 +1,20 @@
 import React, { useRef, useState } from 'react';
 import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
-import { COLORS, SHADOWS, SPACING, TYPE } from '../../constants/theme';
-import { BroomIcon } from '../../components/icons';
+import { COLORS, RADII, SHADOWS, SPACING, TYPE } from '../../constants/theme';
+import { BroomIcon, ChevronRightIcon } from '../../components/icons';
 import BackButton from '../../components/BackButton';
+import Confetti from '../../components/Confetti';
 import GradientBackground from '../../components/GradientBackground';
 import PrimaryButton from '../../components/PrimaryButton';
 import { executeProgram } from './executeProgram';
+import { findGoal } from './grid';
 import Board, { tileCenter } from './Board';
 import Character, { FACING_DEGREES } from './Character';
 import Palette, { palettePixelWidth } from './Palette';
 import Track from './Track';
 import GhostTile from './GhostTile';
+import { getTotalLevels } from './levels';
 import { computeSlotCenters, nearestInsertionIndex, trackPixelWidth, TILE_SIZE } from './trackLayout';
 
 // Deliberate, unhurried pacing so a 4-year-old can map each tile to the
@@ -28,9 +31,10 @@ const TRACK_ROW_Y = TILE_SIZE / 2;
 const PALETTE_ROW_Y = TILE_SIZE + ROW_GAP + TILE_SIZE / 2;
 const OFF_TRACK_PADDING = 60;
 
-export default function GameScreen({ level, navigation }) {
+export default function GameScreen({ level, navigation, onNext }) {
   const [phase, setPhase] = useState('editing'); // editing | running | success | bug
   const [activeIndex, setActiveIndex] = useState(null);
+  const [confettiVisible, setConfettiVisible] = useState(false);
 
   const [track, setTrack] = useState([]); // [{id, type}]
   const [ghostType, setGhostType] = useState(null);
@@ -43,6 +47,8 @@ export default function GameScreen({ level, navigation }) {
   const makeId = () => `t${nextTileId.current++}`;
 
   const startCenter = tileCenter(level.start.x, level.start.y);
+  const goalTile = findGoal(level.board);
+  const goalCenter = tileCenter(goalTile.x, goalTile.y);
   const cx = useSharedValue(startCenter.x);
   const cy = useSharedValue(startCenter.y);
   const rotation = useSharedValue(rotationTarget.current);
@@ -187,6 +193,7 @@ export default function GameScreen({ level, navigation }) {
     timersRef.current = [];
     setPhase('running');
     setActiveIndex(null);
+    setConfettiVisible(false);
 
     const tiles = track.map((t) => t.type);
     const { steps, outcome, failIndex } = executeProgram(level.board, level.start, tiles);
@@ -214,6 +221,7 @@ export default function GameScreen({ level, navigation }) {
       if (outcome === 'success') {
         setActiveIndex(null);
         setPhase('success');
+        setConfettiVisible(true);
         return;
       }
 
@@ -241,13 +249,23 @@ export default function GameScreen({ level, navigation }) {
       <GradientBackground name="dusk" />
       <BackButton onPress={() => navigation.goBack()} />
 
+      <View style={styles.levelIndicator}>
+        <Text style={styles.levelText}>
+          Level {level.id}/{getTotalLevels()}
+        </Text>
+      </View>
+
       <View style={styles.center}>
         <View style={styles.boardWrap}>
           <Board board={level.board} />
           <Character cx={cx} cy={cy} rotation={rotation} lift={lift} />
+          <Confetti
+            visible={confettiVisible}
+            originX={goalCenter.x}
+            originY={goalCenter.y}
+            onComplete={() => setConfettiVisible(false)}
+          />
         </View>
-
-        {phase === 'success' && <Text style={styles.feedback}>Goal reached!</Text>}
 
         <View style={[styles.trackArea, { width: trackAreaWidth, height: trackAreaHeight }]}>
           <Track
@@ -292,6 +310,15 @@ export default function GameScreen({ level, navigation }) {
           />
         </View>
       </View>
+
+      {phase === 'success' && (
+        <View style={styles.completeOverlay}>
+          <View style={styles.completeCard}>
+            <Text style={styles.completeText}>Goal reached!</Text>
+            <PrimaryButton label="Next" icon={<ChevronRightIcon size={26} />} onPress={onNext} />
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -309,9 +336,16 @@ const styles = StyleSheet.create({
   boardWrap: {
     position: 'relative',
   },
-  feedback: {
-    ...TYPE.heading,
-    color: COLORS.success,
+  levelIndicator: {
+    position: 'absolute',
+    top: 55,
+    right: 20,
+    zIndex: 100,
+  },
+  levelText: {
+    ...TYPE.body,
+    fontSize: 18,
+    color: COLORS.textLight,
   },
   trackArea: {
     position: 'relative',
@@ -332,5 +366,26 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
+  },
+  completeOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(62, 58, 94, 0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 200,
+  },
+  completeCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADII.xl,
+    paddingVertical: 32,
+    paddingHorizontal: 40,
+    alignItems: 'center',
+    gap: 20,
+    ...SHADOWS.floating,
+  },
+  completeText: {
+    ...TYPE.display,
+    fontSize: 40,
+    color: COLORS.success,
   },
 });
