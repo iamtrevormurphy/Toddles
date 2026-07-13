@@ -17,6 +17,7 @@ import { COLORS } from './src/constants/theme';
 import HomeScreen from './src/screens/HomeScreen';
 import Tangram from './src/games/Tangram';
 import NumberMarble from './src/games/NumberMarble';
+import PathMaker from './src/games/PathMaker';
 
 const Stack = createNativeStackNavigator();
 
@@ -57,6 +58,7 @@ export default function App() {
             <Stack.Screen name="TangramLetters" component={Tangram} initialParams={{ mode: 'letters' }} />
             <Stack.Screen name="TangramAnimals" component={Tangram} initialParams={{ mode: 'animals' }} />
             <Stack.Screen name="NumberMarble" component={NumberMarble} />
+            <Stack.Screen name="PathMaker" component={PathMaker} />
             {__DEV__ && (
               <Stack.Screen
                 name="CompanionPreview"
