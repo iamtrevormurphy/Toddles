@@ -29,9 +29,9 @@ loadModule('src/games/PathMaker/executeProgram.js', context);
 loadModule('src/games/PathMaker/levels.js', context);
 loadModule('src/games/PathMaker/trackLayout.js', context);
 
-const { TILE_TYPES, executeProgram, PATHMAKER_LEVELS, computeSlotCenters, nearestInsertionIndex, layoutPositions } =
+const { TILE_TYPES, executeProgram, evaluateStep, PATHMAKER_LEVELS, computeSlotCenters, TRACK_WINDOW } =
   vm.runInContext(
-    '({ TILE_TYPES, executeProgram, PATHMAKER_LEVELS, computeSlotCenters, nearestInsertionIndex, layoutPositions })',
+    '({ TILE_TYPES, executeProgram, evaluateStep, PATHMAKER_LEVELS, computeSlotCenters, TRACK_WINDOW })',
     context
   );
 
@@ -159,44 +159,58 @@ run('every level\'s solution actually solves that level', () => {
   }
 });
 
-run('trackLayout: nearestInsertionIndex resolves start/middle/end/empty', () => {
-  const centers = computeSlotCenters(5);
-  const track = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
-
-  assert.strictEqual(nearestInsertionIndex(centers[0] - 100, centers, null, track), 0, 'before everything');
-  assert.strictEqual(nearestInsertionIndex(centers[1] + 1, centers, null, track), 2, 'just past the middle tile');
-  assert.strictEqual(nearestInsertionIndex(centers[2] + 100, centers, null, track), 3, 'after everything');
-  assert.strictEqual(nearestInsertionIndex(centers[0], centers, null, []), 0, 'empty track always resolves to 0');
+run('evaluateStep: one ok step matches executeProgram\'s first step', () => {
+  const b = board(1, 3, [GOAL, PATH, PATH]);
+  const pose = { x: 0, y: 2, facing: 'N', height: 0 };
+  const single = evaluateStep(b, pose, 'step');
+  const program = executeProgram(b, pose, ['step']);
+  assert.strictEqual(single.result, 'ok');
+  assert.deepStrictEqual(single.to, program.steps[0].to);
 });
 
-run('trackLayout: reordering excludes the dragged tile\'s own slot', () => {
-  const centers = computeSlotCenters(5);
-  const track = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
-  // With "b" excluded, the remaining tiles ("a", "c") compact down to
-  // centers[0]/centers[1] — dropping "b" back between them should
-  // resolve to index 1, its original slot, even though "b" itself no
-  // longer occupies any center in this excluded view.
-  const dragX = (centers[0] + centers[1]) / 2 + 1;
-  const index = nearestInsertionIndex(dragX, centers, 'b', track);
-  assert.strictEqual(index, 1);
+run('evaluateStep: failures leave the pose unchanged and name the cell', () => {
+  const b = board(1, 2, [GAP, PATH]);
+  const pose = { x: 0, y: 1, facing: 'N', height: 0 };
+  const step = evaluateStep(b, pose, 'step');
+  assert.strictEqual(step.result, 'gap');
+  assert.deepStrictEqual(step.to, step.from);
+  // field-wise: vm-context objects fail deepStrictEqual's prototype check
+  assert.strictEqual(step.attempted.x, 0);
+  assert.strictEqual(step.attempted.y, 0);
 });
 
-run('trackLayout: layoutPositions matches plain compacted order when idle', () => {
-  const centers = computeSlotCenters(5);
-  const track = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
-  const positions = layoutPositions(track, centers, {});
-  assert.strictEqual(positions.a, centers[0]);
-  assert.strictEqual(positions.b, centers[1]);
-  assert.strictEqual(positions.c, centers[2]);
+run('evaluateStep: turns always succeed and rotate the pose', () => {
+  const b = board(1, 1, [PATH]);
+  const step = evaluateStep(b, { x: 0, y: 0, facing: 'N', height: 0 }, 'turnRight');
+  assert.strictEqual(step.result, 'ok');
+  assert.strictEqual(step.to.facing, 'E');
 });
 
-run('trackLayout: layoutPositions opens a gap at previewIndex', () => {
-  const centers = computeSlotCenters(5);
-  const track = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
-  const positions = layoutPositions(track, centers, { previewIndex: 1 });
-  assert.strictEqual(positions.a, centers[0], 'before the gap: unchanged');
-  assert.strictEqual(positions.b, centers[2], 'at/after the gap: shifted right one slot');
-  assert.strictEqual(positions.c, centers[3], 'at/after the gap: shifted right one slot');
+run('trackLayout: rolling window is wide enough and well-formed', () => {
+  assert.ok(Number.isInteger(TRACK_WINDOW) && TRACK_WINDOW >= 3, 'window of at least 3');
+  assert.strictEqual(computeSlotCenters(TRACK_WINDOW).length, TRACK_WINDOW);
+});
+
+run('snacks: unique ids, on PATH tiles the solution lands on', () => {
+  for (const level of PATHMAKER_LEVELS) {
+    const { board: b, start, solution, snacks = [] } = level;
+    const { steps } = executeProgram(b, start, solution);
+    const landings = new Set(
+      steps.filter((s) => s.result === 'ok').map((s) => `${s.to.x},${s.to.y}`)
+    );
+    const ids = new Set();
+    for (const snack of snacks) {
+      assert.ok(!ids.has(snack.id), `level ${level.id}: duplicate snack id "${snack.id}"`);
+      ids.add(snack.id);
+      assert.ok(['leaf', 'berry'].includes(snack.kind), `level ${level.id}: unknown snack kind "${snack.kind}"`);
+      const tile = b.tiles[snack.y * b.width + snack.x];
+      assert.strictEqual(tile, PATH, `level ${level.id}: snack "${snack.id}" not on a PATH tile`);
+      assert.ok(
+        landings.has(`${snack.x},${snack.y}`),
+        `level ${level.id}: snack "${snack.id}" at (${snack.x},${snack.y}) is never landed on by the solution`
+      );
+    }
+  }
 });
 
 console.log(failures ? `\n${failures} case(s) failed` : '\nAll Path-Maker engine cases passed');

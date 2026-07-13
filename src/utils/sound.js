@@ -285,6 +285,319 @@ export async function playOverflowSound() {
   }
 }
 
+// Play Tile Pickup Sound - Path-Maker: a short upward lift when a tile
+// leaves the palette or track
+export async function playTilePickupSound() {
+  try {
+    if (Platform.OS === 'web') {
+      if (!audioContext) await initAudio();
+
+      if (audioContext && audioContext.state === 'running') {
+        const oscillator = audioContext.createOscillator();
+        const noteGain = audioContext.createGain();
+
+        oscillator.connect(noteGain);
+        noteGain.connect(audioContext.destination);
+
+        const now = audioContext.currentTime;
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(420, now);
+        oscillator.frequency.exponentialRampToValueAtTime(620, now + 0.06);
+
+        noteGain.gain.setValueAtTime(0.25, now);
+        noteGain.gain.exponentialRampToValueAtTime(0.01, now + 0.06);
+
+        oscillator.start(now);
+        oscillator.stop(now + 0.06);
+
+        setTimeout(() => {
+          oscillator.disconnect();
+          noteGain.disconnect();
+        }, 150);
+      }
+    }
+  } catch (e) {
+    // Fail silently
+  }
+}
+
+// Play Tile Drop Sound - Path-Maker: a short downward settle when a tile
+// lands in a track slot
+export async function playTileDropSound() {
+  try {
+    if (Platform.OS === 'web') {
+      if (!audioContext) await initAudio();
+
+      if (audioContext && audioContext.state === 'running') {
+        const oscillator = audioContext.createOscillator();
+        const noteGain = audioContext.createGain();
+
+        oscillator.connect(noteGain);
+        noteGain.connect(audioContext.destination);
+
+        const now = audioContext.currentTime;
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(620, now);
+        oscillator.frequency.exponentialRampToValueAtTime(340, now + 0.07);
+
+        noteGain.gain.setValueAtTime(0.28, now);
+        noteGain.gain.exponentialRampToValueAtTime(0.01, now + 0.07);
+
+        oscillator.start(now);
+        oscillator.stop(now + 0.07);
+
+        setTimeout(() => {
+          oscillator.disconnect();
+          noteGain.disconnect();
+        }, 150);
+      }
+    }
+  } catch (e) {
+    // Fail silently
+  }
+}
+
+// Play Footstep Sound - Path-Maker: one note of a rising pentatonic scale,
+// call once per executed step (index = the step's position in the run) so
+// a full program reads as a cheerful ascending phrase, not five identical
+// clicks
+const FOOTSTEP_SCALE = [392, 440, 494, 587, 659]; // G4 A4 B4 D5 E5, major pentatonic
+export async function playFootstepSound(index = 0) {
+  try {
+    if (Platform.OS === 'web') {
+      if (!audioContext) await initAudio();
+
+      if (audioContext && audioContext.state === 'running') {
+        const oscillator = audioContext.createOscillator();
+        const noteGain = audioContext.createGain();
+
+        oscillator.connect(noteGain);
+        noteGain.connect(audioContext.destination);
+
+        const now = audioContext.currentTime;
+        const freq = FOOTSTEP_SCALE[((index % FOOTSTEP_SCALE.length) + FOOTSTEP_SCALE.length) % FOOTSTEP_SCALE.length];
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(freq, now);
+
+        noteGain.gain.setValueAtTime(0.22, now);
+        noteGain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+
+        oscillator.start(now);
+        oscillator.stop(now + 0.12);
+
+        setTimeout(() => {
+          oscillator.disconnect();
+          noteGain.disconnect();
+        }, 200);
+      }
+    }
+  } catch (e) {
+    // Fail silently
+  }
+}
+
+// Play Hmm Sound - Path-Maker: a gentle, curious two-note lift for the bug
+// outcome. Never a "wrong answer" buzzer — a question, not a penalty.
+export async function playHmmSound() {
+  try {
+    if (Platform.OS === 'web') {
+      if (!audioContext) await initAudio();
+
+      if (audioContext && audioContext.state === 'running') {
+        const now = audioContext.currentTime;
+
+        [
+          { delay: 0, freq: 340, duration: 0.12 },
+          { delay: 0.13, freq: 400, duration: 0.16 },
+        ].forEach(({ delay, freq, duration }) => {
+          const oscillator = audioContext.createOscillator();
+          const noteGain = audioContext.createGain();
+
+          oscillator.connect(noteGain);
+          noteGain.connect(audioContext.destination);
+
+          const startTime = now + delay;
+          oscillator.type = 'sine';
+          oscillator.frequency.setValueAtTime(freq, startTime);
+
+          noteGain.gain.setValueAtTime(0.18, startTime);
+          noteGain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+
+          oscillator.start(startTime);
+          oscillator.stop(startTime + duration);
+
+          setTimeout(() => {
+            oscillator.disconnect();
+            noteGain.disconnect();
+          }, 400);
+        });
+      }
+    }
+  } catch (e) {
+    // Fail silently
+  }
+}
+
+// Play Moonwalk Sound - Path-Maker: a soft rising whoosh while Lento
+// slides one step backward after the child pulls the last tile out.
+// Rising (not falling) so an undo never sounds like losing something.
+export async function playMoonwalkSound() {
+  try {
+    if (Platform.OS === 'web') {
+      if (!audioContext) await initAudio();
+
+      if (audioContext && audioContext.state === 'running') {
+        const oscillator = audioContext.createOscillator();
+        const noteGain = audioContext.createGain();
+
+        oscillator.connect(noteGain);
+        noteGain.connect(audioContext.destination);
+
+        const now = audioContext.currentTime;
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(340, now);
+        oscillator.frequency.exponentialRampToValueAtTime(520, now + 0.24);
+
+        noteGain.gain.setValueAtTime(0.18, now);
+        noteGain.gain.exponentialRampToValueAtTime(0.01, now + 0.24);
+
+        oscillator.start(now);
+        oscillator.stop(now + 0.24);
+
+        setTimeout(() => {
+          oscillator.disconnect();
+          noteGain.disconnect();
+        }, 400);
+      }
+    }
+  } catch (e) {
+    // Fail silently
+  }
+}
+
+// Play Teeter Sound - Path-Maker: two alternating wobble tones while Lento
+// windmills at the brink of a gap. Comic suspense, never alarm.
+export async function playTeeterSound() {
+  try {
+    if (Platform.OS === 'web') {
+      if (!audioContext) await initAudio();
+
+      if (audioContext && audioContext.state === 'running') {
+        const now = audioContext.currentTime;
+
+        [
+          { delay: 0, freq: 360 },
+          { delay: 0.14, freq: 300 },
+          { delay: 0.28, freq: 360 },
+          { delay: 0.42, freq: 300 },
+        ].forEach(({ delay, freq }) => {
+          const oscillator = audioContext.createOscillator();
+          const noteGain = audioContext.createGain();
+
+          oscillator.connect(noteGain);
+          noteGain.connect(audioContext.destination);
+
+          const startTime = now + delay;
+          oscillator.type = 'triangle';
+          oscillator.frequency.setValueAtTime(freq, startTime);
+
+          noteGain.gain.setValueAtTime(0.14, startTime);
+          noteGain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.12);
+
+          oscillator.start(startTime);
+          oscillator.stop(startTime + 0.12);
+
+          setTimeout(() => {
+            oscillator.disconnect();
+            noteGain.disconnect();
+          }, 800);
+        });
+      }
+    }
+  } catch (e) {
+    // Fail silently
+  }
+}
+
+// Play Bonk Sound - Path-Maker: one soft low thud for walking into a
+// raised block. Pillow-soft, cartoon-comic, no buzzer edge.
+export async function playBonkSound() {
+  try {
+    if (Platform.OS === 'web') {
+      if (!audioContext) await initAudio();
+
+      if (audioContext && audioContext.state === 'running') {
+        const oscillator = audioContext.createOscillator();
+        const noteGain = audioContext.createGain();
+
+        oscillator.connect(noteGain);
+        noteGain.connect(audioContext.destination);
+
+        const now = audioContext.currentTime;
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(160, now);
+        oscillator.frequency.exponentialRampToValueAtTime(90, now + 0.14);
+
+        noteGain.gain.setValueAtTime(0.3, now);
+        noteGain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
+
+        oscillator.start(now);
+        oscillator.stop(now + 0.14);
+
+        setTimeout(() => {
+          oscillator.disconnect();
+          noteGain.disconnect();
+        }, 250);
+      }
+    }
+  } catch (e) {
+    // Fail silently
+  }
+}
+
+// Play Chomp Sound - Path-Maker: two quick crunchy blips when Lento
+// munches a snack on the path.
+export async function playChompSound() {
+  try {
+    if (Platform.OS === 'web') {
+      if (!audioContext) await initAudio();
+
+      if (audioContext && audioContext.state === 'running') {
+        const now = audioContext.currentTime;
+
+        [
+          { delay: 0, freq: 230 },
+          { delay: 0.09, freq: 180 },
+        ].forEach(({ delay, freq }) => {
+          const oscillator = audioContext.createOscillator();
+          const noteGain = audioContext.createGain();
+
+          oscillator.connect(noteGain);
+          noteGain.connect(audioContext.destination);
+
+          const startTime = now + delay;
+          oscillator.type = 'triangle';
+          oscillator.frequency.setValueAtTime(freq, startTime);
+          oscillator.frequency.exponentialRampToValueAtTime(freq * 0.7, startTime + 0.06);
+
+          noteGain.gain.setValueAtTime(0.24, startTime);
+          noteGain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.06);
+
+          oscillator.start(startTime);
+          oscillator.stop(startTime + 0.06);
+
+          setTimeout(() => {
+            oscillator.disconnect();
+            noteGain.disconnect();
+          }, 300);
+        });
+      }
+    }
+  } catch (e) {
+    // Fail silently
+  }
+}
+
 // Play Error Sound - gentle wrong answer feedback
 export async function playErrorSound() {
   try {

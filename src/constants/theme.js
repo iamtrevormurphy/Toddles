@@ -183,6 +183,21 @@ export const MARBLE_COLORS = {
   playArea: '#EFEAF6',
 };
 
+// Path-Maker colors — scoped like TANGRAM_COLORS/MARBLE_COLORS rather than
+// hand-picked from the shared bubble set, which is nearly exhausted once
+// the board claims bubbleGreen (goal), bubbleYellow (raised), and
+// bubbleOrange (active-highlight/CTA). The protagonist is now Lento the
+// sloth (a real Shapefolk — see src/characters/defs/lento.js; his fawn/
+// cocoa palette lives in CHARACTER_COLORS). characterBody remains only
+// for reference/history: it was the pre-Lento teardrop's hue.
+export const PATHMAKER_COLORS = {
+  characterBody: '#D98BA3', // dusty rose (legacy teardrop walker)
+  tileStep: '#6FA8D4',      // soft sky blue
+  tileTurnLeft: '#C98FD1',  // soft orchid
+  tileTurnRight: '#8FBFA8', // soft mint
+  island: '#E4D5BD',        // warm stone slab the whole board floats on (a full step deeper than the cream tiles so the walkway pops)
+};
+
 // Extended animation timings
 export const ANIMATION = {
   snapDuration: 200,

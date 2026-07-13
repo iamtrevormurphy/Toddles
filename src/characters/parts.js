@@ -10,6 +10,8 @@ export const CHARACTER_COLORS = {
   lavender: '#A99BD1',
   rose: '#D98BA3',
   moss: '#8FB26E',
+  fawn: '#C7A97F', // Lento's dominant honey-taupe
+  cocoa: '#8A6E58', // Lento's eye-patch mask, nose, claws
   ink: '#3E3A5E',
   white: '#FFFDF9',
 };

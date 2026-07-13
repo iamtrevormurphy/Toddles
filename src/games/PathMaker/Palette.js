@@ -14,7 +14,7 @@ export function palettePixelWidth() {
 // The fixed row of instruction "stamps." Masters never move or deplete —
 // dragging one spawns a ghost that GameScreen tracks separately via
 // ghostSV/onSpawnStart, so the master itself never needs to re-render.
-export default function Palette({ rowY, disabled, ghostSV, onSpawnStart, onGhostMove, onGhostEnd }) {
+export default function Palette({ rowY, disabled, ghostSV, onSpawnStart, onGhostMove, onGhostEnd, onTap }) {
   return (
     <>
       {PALETTE_TYPES.map((type, i) => (
@@ -29,6 +29,7 @@ export default function Palette({ rowY, disabled, ghostSV, onSpawnStart, onGhost
           onSpawnStart={onSpawnStart}
           onGhostMove={onGhostMove}
           onGhostEnd={onGhostEnd}
+          onTap={onTap}
         />
       ))}
     </>

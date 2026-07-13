@@ -30,43 +30,58 @@ export function executeProgram(board, startPose, tiles) {
   }
 
   for (let i = 0; i < tiles.length; i++) {
-    const type = tiles[i];
-    const from = { ...pose };
+    const step = evaluateStep(board, pose, tiles[i]);
+    steps.push({ instructionIndex: i, ...step });
 
-    if (type === 'turnLeft' || type === 'turnRight') {
-      pose = { ...pose, facing: rotateFacing(pose.facing, type) };
-      steps.push({ instructionIndex: i, type, from, to: { ...pose }, result: 'ok' });
-      continue;
+    if (step.result !== 'ok') {
+      return { steps, outcome: step.result, failIndex: i };
     }
+    pose = step.to;
 
-    // type === 'step' | 'hop'
-    const { dx, dy } = DIRECTIONS[pose.facing];
-    const targetX = pose.x + dx;
-    const targetY = pose.y + dy;
-    const targetTile = tileAt(board, targetX, targetY);
-
-    if (targetTile === undefined) {
-      steps.push({ instructionIndex: i, type, from, to: from, attempted: { x: targetX, y: targetY }, result: 'edge' });
-      return { steps, outcome: 'edge', failIndex: i };
-    }
-    if (targetTile === TILE_TYPES.GAP) {
-      steps.push({ instructionIndex: i, type, from, to: from, attempted: { x: targetX, y: targetY }, result: 'gap' });
-      return { steps, outcome: 'gap', failIndex: i };
-    }
-
-    const needed = requiredHeight(targetTile);
-    if (type === 'step' && pose.height !== needed) {
-      steps.push({ instructionIndex: i, type, from, to: from, attempted: { x: targetX, y: targetY }, result: 'blocked' });
-      return { steps, outcome: 'blocked', failIndex: i };
-    }
-
-    pose = { x: targetX, y: targetY, facing: pose.facing, height: type === 'hop' ? needed : pose.height };
-    steps.push({ instructionIndex: i, type, from, to: { ...pose }, result: 'ok' });
-
-    if (targetTile === TILE_TYPES.GOAL) {
+    if (tileAt(board, pose.x, pose.y) === TILE_TYPES.GOAL) {
       return { steps, outcome: 'success', failIndex: null };
     }
   }
 
   return { steps, outcome: 'incomplete', failIndex: tiles.length };
+}
+
+// One instruction against one pose — the live-follow runner's unit of
+// work (each dropped tile is evaluated and animated immediately).
+// Returns { type, from, to, result, attempted? }:
+//   result 'ok'      → `to` is the new pose (turns always land here)
+//   result 'edge' | 'gap' | 'blocked' → `to` === `from`, `attempted` is
+//     the refused cell — the failure-theater animations lean toward it.
+export function evaluateStep(board, pose, type) {
+  const from = { ...pose };
+
+  if (type === 'turnLeft' || type === 'turnRight') {
+    return { type, from, to: { ...pose, facing: rotateFacing(pose.facing, type) }, result: 'ok' };
+  }
+
+  // type === 'step' | 'hop'
+  const { dx, dy } = DIRECTIONS[pose.facing];
+  const targetX = pose.x + dx;
+  const targetY = pose.y + dy;
+  const targetTile = tileAt(board, targetX, targetY);
+  const attempted = { x: targetX, y: targetY };
+
+  if (targetTile === undefined) {
+    return { type, from, to: from, attempted, result: 'edge' };
+  }
+  if (targetTile === TILE_TYPES.GAP) {
+    return { type, from, to: from, attempted, result: 'gap' };
+  }
+
+  const needed = requiredHeight(targetTile);
+  if (type === 'step' && pose.height !== needed) {
+    return { type, from, to: from, attempted, result: 'blocked' };
+  }
+
+  return {
+    type,
+    from,
+    to: { x: targetX, y: targetY, facing: pose.facing, height: type === 'hop' ? needed : pose.height },
+    result: 'ok',
+  };
 }

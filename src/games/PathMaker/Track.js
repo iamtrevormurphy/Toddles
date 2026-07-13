@@ -1,57 +1,64 @@
 import React from 'react';
 import DraggableTile from './DraggableTile';
 import TrackSlot from './TrackSlot';
-import { assignSlots, layoutPositions } from './trackLayout';
+import { TRACK_WINDOW } from './trackLayout';
 
-// Renders slotCount positions: an empty dashed TrackSlot or a filled,
-// draggable DraggableTile, whichever the track (plus any in-flight
-// preview gap) implies for that index.
+// Renders the last TRACK_WINDOW entries of the (unbounded) program: the
+// track is a rolling history, not a plan. When the window is full a new
+// tile lands in the rightmost slot and everything springs one slot left
+// (DraggableTile already springs on x-prop changes). Only the LAST tile
+// is interactive — pulling or tapping it is the "undo one step" gesture;
+// everything earlier is committed history. highlightIndex/pulseIndex are
+// PROGRAM indexes; this component maps them into the window.
 export default function Track({
   slotCenters,
   rowY,
   track,
-  previewIndex,
-  draggingId,
+  previewSlot,
   disabled,
   highlightIndex,
   pulseIndex,
+  ejectingId,
   onDragStart,
   onDragMove,
   onDragEnd,
   onRemoved,
+  onTap,
 }) {
-  const assignment = assignSlots(track, { previewIndex, draggingId });
-  const positions = layoutPositions(track, slotCenters, { previewIndex, draggingId });
-
-  const tileBySlot = {};
-  for (const tile of track) {
-    if (tile.id === draggingId) continue;
-    tileBySlot[assignment[tile.id]] = tile;
-  }
+  const windowStart = Math.max(0, track.length - TRACK_WINDOW);
 
   return (
     <>
       {slotCenters.map((slotX, i) => {
-        const tile = tileBySlot[i];
+        const programIndex = windowStart + i;
+        const tile = track[programIndex];
         if (!tile) {
-          return <TrackSlot key={`slot-${i}`} x={slotX} y={rowY} isPulsing={pulseIndex === i} />;
+          return (
+            <TrackSlot
+              key={`slot-${i}`}
+              x={slotX}
+              y={rowY}
+              isPulsing={previewSlot === i}
+            />
+          );
         }
-        const tileIndex = track.findIndex((t) => t.id === tile.id);
         return (
           <DraggableTile
             key={tile.id}
             mode="track"
             id={tile.id}
             type={tile.type}
-            x={positions[tile.id]}
+            x={slotX}
             y={rowY}
-            disabled={disabled}
-            isActive={highlightIndex === tileIndex}
-            isPulsing={pulseIndex === tileIndex}
+            disabled={disabled || programIndex !== track.length - 1}
+            isActive={highlightIndex === programIndex}
+            isPulsing={pulseIndex === programIndex}
+            isEjecting={ejectingId === tile.id}
             onDragStart={onDragStart}
             onDragMove={onDragMove}
             onDragEnd={onDragEnd}
             onRemoved={onRemoved}
+            onTap={onTap}
           />
         );
       })}

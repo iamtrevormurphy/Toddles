@@ -5,6 +5,12 @@
 export const TILE_SIZE = 64; // matches TOUCH.minTargetSize
 export const TILE_GAP = 10;
 
+// Live-follow shows the track as a rolling window over the program's tail
+// (the program itself is unbounded — the track is a history, not a plan a
+// child must fit into). 4 slots: fits every screen next to the palette,
+// and a 4-year-old only ever acts on the last move anyway.
+export const TRACK_WINDOW = 4;
+
 // Pixel center of slot i, relative to the track container's own left edge.
 export function computeSlotCenters(slotCount) {
   const centers = [];
@@ -18,39 +24,6 @@ export function trackPixelWidth(slotCount) {
   return slotCount * (TILE_SIZE + TILE_GAP) - TILE_GAP;
 }
 
-// Where would a tile land if dropped at dragX right now? Counts how many
-// of the OTHER tiles' own compacted centers dragX has passed — the tile
-// currently under the finger (excludeId) never counts as its own
-// obstacle, which is what makes a mid-reorder able to resolve back to its
-// own original index instead of always detecting itself as a foreign gap.
-export function nearestInsertionIndex(dragX, slotCenters, excludeId, track) {
-  const effective = track.filter((t) => t.id !== excludeId);
-  let index = 0;
-  for (let i = 0; i < effective.length; i++) {
-    if (dragX > slotCenters[i]) index++;
-  }
-  return index;
-}
-
-// Which slot index each NON-dragged tile currently occupies, given an
-// optional preview insertion point. Tiles before previewIndex keep their
-// compacted slot; tiles from previewIndex onward shift one slot right,
-// leaving a visual gap open for wherever the dragged/ghost tile currently
-// sits. With no previewIndex, this is just the plain compacted order (the
-// idle layout). Returns {[id]: slotIndex}.
-export function assignSlots(track, { previewIndex = null, draggingId = null } = {}) {
-  const effective = track.filter((t) => t.id !== draggingId);
-  const assignment = {};
-  effective.forEach((tile, i) => {
-    assignment[tile.id] = previewIndex != null && i >= previewIndex ? i + 1 : i;
-  });
-  return assignment;
-}
-
-// Target x for every NON-dragged tile — assignSlots resolved to pixels.
-export function layoutPositions(track, slotCenters, opts = {}) {
-  const assignment = assignSlots(track, opts);
-  const positions = {};
-  for (const id in assignment) positions[id] = slotCenters[assignment[id]];
-  return positions;
-}
+// The track is append-only (live-follow: each dropped tile executes
+// immediately, and only the LAST tile can be pulled back out), so tile i
+// always sits at slotCenters[i] — no insertion-index or reorder math.

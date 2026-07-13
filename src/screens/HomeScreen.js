@@ -5,10 +5,10 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
 } from 'react-native-reanimated';
-import Svg, { Circle, ClipPath, Defs, Path } from 'react-native-svg';
+import Svg, { Circle, ClipPath, Defs, Path, Rect } from 'react-native-svg';
 import { COLORS, MARBLE_COLORS, RADII, SHADOWS, TYPE, shade } from '../constants/theme';
 import GradientBackground from '../components/GradientBackground';
-import { Companion } from '../characters';
+import { Companion, CHARACTER_COLORS } from '../characters';
 import PuzzlePreview from '../games/Tangram/PuzzlePreview';
 import { getPuzzleById } from '../games/Tangram/puzzles';
 
@@ -44,22 +44,30 @@ function MarblesArt({ size }) {
   );
 }
 
-// Path-Maker card art: a placeholder L-shaped path from a small character
-// to a flag — swap for real brand art once the game's visual polish phase
-// lands.
+// Path-Maker card art: mini Lento (the game's sloth protagonist — fawn
+// head, cream face, cocoa eye-stripe mask) at the start of a terracotta
+// path that leads to the goal-green tile. Same brand loop as the bird
+// card: the art IS the character the child will meet inside.
 function PathMakerArt({ size }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 100 100">
+      <Rect x={60} y={22} width={26} height={26} rx={6} fill={COLORS.bubbleGreen} />
       <Path
-        d="M50 82 L50 34 L74 34"
+        d="M26 62 L26 35 L56 35"
         stroke={COLORS.bubbleOrange}
-        strokeWidth={8}
+        strokeWidth={7}
         strokeLinecap="round"
         strokeLinejoin="round"
         fill="none"
       />
-      <Circle cx={50} cy={82} r={8} fill={MARBLE_COLORS.marble} />
-      <Path d="M74 22 L88 34 L74 46 Z" fill={shade(MARBLE_COLORS.marble, -0.25)} />
+      {/* Lento head */}
+      <Rect x={11} y={62} width={30} height={27} rx={7} fill={CHARACTER_COLORS.fawn} />
+      <Rect x={14.5} y={66} width={23} height={16.5} rx={4} fill={CHARACTER_COLORS.white} />
+      <Rect x={16} y={70.5} width={8.5} height={5} rx={2.5} fill={CHARACTER_COLORS.cocoa} />
+      <Rect x={27.5} y={70.5} width={8.5} height={5} rx={2.5} fill={CHARACTER_COLORS.cocoa} />
+      <Circle cx={20.5} cy={73} r={1.9} fill={CHARACTER_COLORS.ink} />
+      <Circle cx={31.5} cy={73} r={1.9} fill={CHARACTER_COLORS.ink} />
+      <Path d="M23.5 79 L28.5 79 L26 82 Z" fill={CHARACTER_COLORS.cocoa} />
     </Svg>
   );
 }

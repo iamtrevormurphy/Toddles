@@ -48,6 +48,28 @@ export const REACTIONS = {
   hop: {
     hop: { up: -8, upDuration: 150, settleDamping: 13 },
   },
+  // Path-Maker failure/snack theater (Lento), reusable by any character.
+  // appendageSwings runs the appendage joint through a fixed sequence of
+  // angles — big alternating swings read as windmilling arms.
+  teeter: {
+    tiltShake: { deg: 11, count: 3, duration: 110 },
+    appendageSwings: { degs: [-42, 36, -30, 24, 0], duration: 130 },
+  },
+  phew: {
+    squash: [0.9, 1.06, 1],
+    cheeksFlash: 700,
+  },
+  bonk: {
+    squash: [1.24, 0.92, 1.04, 1],
+    tiltShake: { deg: 7, count: 2, duration: 120 },
+  },
+  munch: {
+    squash: [0.92, 1.05, 0.94, 1],
+    cheeksFlash: 700,
+  },
+  headRub: {
+    appendageSwings: { degs: [-55, -46, -55, -46, 0], duration: 210 },
+  },
 };
 
 // Blink cadence: precomputed jitter so worklets never call Math.random().

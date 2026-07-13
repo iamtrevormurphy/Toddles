@@ -12,6 +12,13 @@ import { TILE_TYPES } from './grid';
 
 const { PATH, GAP, GOAL } = TILE_TYPES;
 
+// `snacks` sit on tiles the SOLUTION path visits (validated by
+// scripts/validate-pathmaker.js) so Lento munches them in passing —
+// decorative rewards, never gating. `solution` is the validator's
+// reference walk. `slotCount` is legacy: live-follow's rolling track
+// window ignores it (program length is unbounded), but the validator
+// still checks solutions stay within it as a difficulty sanity bound.
+
 export const PATHMAKER_LEVELS = [
   // --- Levels 1-3: straight corridors, Step only ---
   {
@@ -27,6 +34,7 @@ export const PATHMAKER_LEVELS = [
     start: { x: 0, y: 2, facing: 'N' },
     solution: ['step', 'step'],
     slotCount: 2,
+    snacks: [{ id: 's1', x: 0, y: 1, kind: 'leaf' }],
   },
   {
     id: 3,
@@ -34,6 +42,10 @@ export const PATHMAKER_LEVELS = [
     start: { x: 0, y: 3, facing: 'N' },
     solution: ['step', 'step', 'step'],
     slotCount: 3,
+    snacks: [
+      { id: 's1', x: 0, y: 2, kind: 'berry' },
+      { id: 's2', x: 0, y: 1, kind: 'leaf' },
+    ],
   },
 
   // --- Levels 4-8: turns, single then composed ---
@@ -47,6 +59,7 @@ export const PATHMAKER_LEVELS = [
     start: { x: 0, y: 1, facing: 'N' },
     solution: ['step', 'turnRight', 'step'],
     slotCount: 3,
+    snacks: [{ id: 's1', x: 0, y: 0, kind: 'leaf' }],
   },
   {
     id: 5,
@@ -58,6 +71,7 @@ export const PATHMAKER_LEVELS = [
     start: { x: 1, y: 1, facing: 'N' },
     solution: ['step', 'turnLeft', 'step'],
     slotCount: 3,
+    snacks: [{ id: 's1', x: 1, y: 0, kind: 'berry' }],
   },
   {
     id: 6,
@@ -73,6 +87,10 @@ export const PATHMAKER_LEVELS = [
     start: { x: 0, y: 2, facing: 'N' },
     solution: ['step', 'turnRight', 'step', 'turnLeft', 'step'],
     slotCount: 5,
+    snacks: [
+      { id: 's1', x: 0, y: 1, kind: 'leaf' },
+      { id: 's2', x: 1, y: 1, kind: 'berry' },
+    ],
   },
   {
     id: 7,
@@ -89,6 +107,11 @@ export const PATHMAKER_LEVELS = [
     start: { x: 0, y: 3, facing: 'N' },
     solution: ['step', 'step', 'turnRight', 'step', 'turnLeft', 'step', 'turnRight', 'step'],
     slotCount: 8,
+    snacks: [
+      { id: 's1', x: 0, y: 2, kind: 'leaf' },
+      { id: 's2', x: 1, y: 1, kind: 'berry' },
+      { id: 's3', x: 1, y: 0, kind: 'leaf' },
+    ],
   },
   {
     id: 8,
@@ -104,6 +127,10 @@ export const PATHMAKER_LEVELS = [
     start: { x: 0, y: 0, facing: 'S' },
     solution: ['step', 'step', 'turnLeft', 'step'],
     slotCount: 4,
+    snacks: [
+      { id: 's1', x: 0, y: 1, kind: 'leaf' },
+      { id: 's2', x: 0, y: 2, kind: 'berry' },
+    ],
   },
 
   // --- Levels 9-12: gap tiles as routing constraints ---
@@ -120,6 +147,10 @@ export const PATHMAKER_LEVELS = [
     start: { x: 0, y: 1, facing: 'N' },
     solution: ['turnRight', 'step', 'turnLeft', 'step', 'turnRight', 'step'],
     slotCount: 6,
+    snacks: [
+      { id: 's1', x: 1, y: 1, kind: 'leaf' },
+      { id: 's2', x: 1, y: 0, kind: 'berry' },
+    ],
   },
   {
     id: 10,
@@ -135,6 +166,10 @@ export const PATHMAKER_LEVELS = [
     start: { x: 0, y: 0, facing: 'S' },
     solution: ['step', 'step', 'turnLeft', 'step', 'step'],
     slotCount: 5,
+    snacks: [
+      { id: 's1', x: 0, y: 1, kind: 'leaf' },
+      { id: 's2', x: 1, y: 2, kind: 'berry' },
+    ],
   },
   {
     id: 11,
@@ -150,6 +185,11 @@ export const PATHMAKER_LEVELS = [
     start: { x: 0, y: 2, facing: 'N' },
     solution: ['turnRight', 'step', 'step', 'step', 'turnLeft', 'step', 'step'],
     slotCount: 7,
+    snacks: [
+      { id: 's1', x: 1, y: 2, kind: 'leaf' },
+      { id: 's2', x: 3, y: 2, kind: 'berry' },
+      { id: 's3', x: 3, y: 1, kind: 'leaf' },
+    ],
   },
   {
     id: 12,
@@ -166,6 +206,11 @@ export const PATHMAKER_LEVELS = [
     start: { x: 0, y: 3, facing: 'N' },
     solution: ['step', 'turnRight', 'step', 'step', 'turnLeft', 'step', 'step', 'turnRight', 'step'],
     slotCount: 9,
+    snacks: [
+      { id: 's1', x: 0, y: 2, kind: 'leaf' },
+      { id: 's2', x: 2, y: 2, kind: 'berry' },
+      { id: 's3', x: 2, y: 1, kind: 'leaf' },
+    ],
   },
 ];
 

@@ -1,9 +1,20 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
-import { COLORS, RADII, SHADOWS } from '../../constants/theme';
+import { COLORS, PATHMAKER_COLORS, RADII, SHADOWS } from '../../constants/theme';
 import InstructionIcon from './InstructionIcon';
 import { TILE_SIZE } from './trackLayout';
+
+// Must match DraggableTile.js's TILE_TOP_COLORS — the ghost is a preview
+// of the toy block being dragged, so it needs the same resting color, not
+// a fixed accent, or picking up e.g. a mint turn-tile would show an
+// unrelated-colored ghost.
+const TILE_TOP_COLORS = {
+  step: PATHMAKER_COLORS.tileStep,
+  turnLeft: PATHMAKER_COLORS.tileTurnLeft,
+  turnRight: PATHMAKER_COLORS.tileTurnRight,
+  hop: PATHMAKER_COLORS.tileStep,
+};
 
 // The floating tile that follows the finger while dragging a new
 // instruction out of the palette. Presentational only — no gesture — so
@@ -23,8 +34,11 @@ export default function GhostTile({ type, ghostSV }) {
   if (!type) return null;
 
   return (
-    <Animated.View style={[styles.tile, style]} pointerEvents="none">
-      <InstructionIcon type={type} color={COLORS.white} />
+    <Animated.View
+      style={[styles.tile, { backgroundColor: TILE_TOP_COLORS[type] ?? COLORS.white }, style]}
+      pointerEvents="none"
+    >
+      <InstructionIcon type={type} color={COLORS.textDark} />
     </Animated.View>
   );
 }
@@ -37,7 +51,6 @@ const styles = StyleSheet.create({
     width: TILE_SIZE,
     height: TILE_SIZE,
     borderRadius: RADII.md,
-    backgroundColor: COLORS.bubbleOrange,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 200,

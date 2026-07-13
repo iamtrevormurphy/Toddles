@@ -23,8 +23,9 @@ import { BLINK_INTERVALS, MOODS, REACTIONS } from './moods';
 import pip from './defs/pip';
 import juno from './defs/juno';
 import miso from './defs/miso';
+import lento from './defs/lento';
 
-export const CHARACTERS = { pip, juno, miso };
+export const CHARACTERS = { pip, juno, miso, lento };
 
 // The Shapefolk rig. One component renders any character def:
 // - whole-body motion (bob/hop/tilt/squash) on wrapper Animated.Views —
@@ -111,14 +112,17 @@ const Companion = forwardRef(function Companion(
   }, [mood, hintSign]);
 
   // --- Autonomous blink (JS-side scheduler, precomputed jitter) -----------
+  // Defs may override the lid speed (Lento's slow blink); default is the
+  // original quick cadence.
+  const blinkSpeed = def.blink || { close: 70, open: 110 };
   useEffect(() => {
     let timer;
     let i = 0;
     const schedule = () => {
       timer = setTimeout(() => {
         blink.value = withSequence(
-          withTiming(0.18, { duration: 70 }),
-          withTiming(1, { duration: 110 })
+          withTiming(0.18, { duration: blinkSpeed.close }),
+          withTiming(1, { duration: blinkSpeed.open })
         );
         i += 1;
         schedule();
@@ -126,7 +130,7 @@ const Companion = forwardRef(function Companion(
     };
     schedule();
     return () => clearTimeout(timer);
-  }, []);
+  }, [def]);
 
   // --- Gaze: derived on the UI thread, zero renders during drags ----------
   const maxGaze = def.eyes.maxGaze * px;
@@ -182,6 +186,13 @@ const Companion = forwardRef(function Companion(
         appRot.value = withSequence(
           withTiming(r.appendageFlick.deg, { duration: r.appendageFlick.duration }),
           withSpring(0, { damping: 14 })
+        );
+      }
+      if (r.appendageSwings) {
+        appRot.value = withSequence(
+          ...r.appendageSwings.degs.map((deg) =>
+            withTiming(deg, { duration: r.appendageSwings.duration })
+          )
         );
       }
       if (r.tiltShake) {
