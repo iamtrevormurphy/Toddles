@@ -15,6 +15,8 @@ export default function CompanionPreview({ navigation }) {
   const { width } = useWindowDimensions();
   const [character, setCharacter] = useState('pip');
   const [mood, setMood] = useState('idle');
+  const [view, setView] = useState('front');
+  const [flipped, setFlipped] = useState(false); // eyeball the W profile
   const companionRef = useRef(null);
 
   const anchor = { x: width / 2, y: 240 };
@@ -48,15 +50,18 @@ export default function CompanionPreview({ navigation }) {
       <Text style={styles.title}>Shapefolk</Text>
 
       <View style={styles.stage}>
-        <Companion
-          ref={companionRef}
-          character={character}
-          size={150}
-          mood={mood}
-          gazeTarget={gaze}
-          anchor={anchor}
-          hintTarget={{ x: width / 2 - 120, y: 560 }}
-        />
+        <View style={flipped && { transform: [{ scaleX: -1 }] }}>
+          <Companion
+            ref={companionRef}
+            character={character}
+            size={150}
+            mood={mood}
+            view={view}
+            gazeTarget={gaze}
+            anchor={anchor}
+            hintTarget={{ x: width / 2 - 120, y: 560 }}
+          />
+        </View>
       </View>
 
       <View style={styles.controls}>
@@ -66,6 +71,12 @@ export default function CompanionPreview({ navigation }) {
           onPress={setCharacter}
         />
         <Row items={Object.keys(MOODS)} active={mood} onPress={setMood} />
+        <Row items={['front', 'side', 'back']} active={view} onPress={setView} />
+        <Row
+          items={['flip']}
+          active={flipped ? 'flip' : null}
+          onPress={() => setFlipped((f) => !f)}
+        />
         <Row
           items={Object.keys(REACTIONS)}
           onPress={(t) => companionRef.current?.react(t)}

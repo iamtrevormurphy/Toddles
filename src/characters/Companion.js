@@ -36,7 +36,15 @@ export const CHARACTERS = { pip, juno, miso, lento };
 // - "watching" derives on the UI thread from gazeTarget shared values
 // Always pointerEvents="none"; never covers touch targets (characters.md).
 const Companion = forwardRef(function Companion(
-  { character = 'pip', size = 80, mood = 'idle', gazeTarget = null, anchor = null, hintTarget = null },
+  {
+    character = 'pip',
+    size = 80,
+    mood = 'idle',
+    view = 'front',
+    gazeTarget = null,
+    anchor = null,
+    hintTarget = null,
+  },
   ref
 ) {
   const def = CHARACTERS[character];
@@ -44,6 +52,22 @@ const Companion = forwardRef(function Companion(
   const px = size / vbH; // viewBox unit → screen px
   const W = vbW * px;
   const H = vbH * px;
+
+  // Per-facing views (def.views[view]) override parts per KEY; the root def
+  // is both the 'front' view and the fallback, so characters without views
+  // are untouched. eyes/cheeks use an `in` check because explicit null is
+  // meaningful there (the back of a head has neither), while an absent key
+  // means "same as front". shadow/feetY/blink stay root-level — the
+  // silhouette footprint doesn't change with facing.
+  const v = view !== 'front' ? def.views?.[view] : null;
+  const masses = v?.masses ?? def.masses;
+  const details = v?.details ?? def.details;
+  const appendages = v?.appendages ?? def.appendages;
+  const eyes = v && 'eyes' in v ? v.eyes : def.eyes;
+  const cheeksDef = v && 'cheeks' in v ? v.cheeks : def.cheeks;
+  // 0, 1, or 2 eyes per view: views use {points: [[x,y], ...]}, root defs
+  // keep their original {left, right} shape.
+  const eyePoints = eyes ? eyes.points ?? [eyes.left, eyes.right] : [];
 
   // Whole-body values
   const bobY = useSharedValue(0);
@@ -115,7 +139,9 @@ const Companion = forwardRef(function Companion(
   // Defs may override the lid speed (Lento's slow blink); default is the
   // original quick cadence.
   const blinkSpeed = def.blink || { close: 70, open: 110 };
+  const hasEyes = eyePoints.length > 0;
   useEffect(() => {
+    if (!hasEyes) return undefined; // nothing to blink in an eyeless view
     let timer;
     let i = 0;
     const schedule = () => {
@@ -130,10 +156,10 @@ const Companion = forwardRef(function Companion(
     };
     schedule();
     return () => clearTimeout(timer);
-  }, [def]);
+  }, [def, hasEyes]);
 
   // --- Gaze: derived on the UI thread, zero renders during drags ----------
-  const maxGaze = def.eyes.maxGaze * px;
+  const maxGaze = (eyes?.maxGaze ?? 0) * px;
   const gazeDX = useDerivedValue(() => {
     if (!gazeTarget || !anchor || gazeTarget.active.value === 0) {
       return withSpring(0, { damping: 18 });
@@ -241,25 +267,25 @@ const Companion = forwardRef(function Companion(
 
   const cheeksStyle = useAnimatedStyle(() => ({ opacity: cheeks.value }));
 
-  // --- Static geometry (computed once per def/size) -------------------------
+  // --- Static geometry (computed once per def/size/view) --------------------
   const body = useMemo(() => {
-    const sides = def.masses.map((m) => ({
+    const sides = masses.map((m) => ({
       d: extrudeSidePath(m.verts),
       fill: sideColor(m.color),
     }));
-    const faces = def.masses.map((m) => ({
+    const faces = masses.map((m) => ({
       d: polyPath(m.verts),
       fill: resolveColor(m.color),
     }));
     return { sides, faces };
-  }, [def]);
+  }, [def, view]);
 
   const renderAppendage = (a) => (
     <Appendage key={`${def.id}-${a.id}`} def={a} appRot={appRot} px={px} W={W} H={H} vbW={vbW} vbH={vbH} />
   );
 
-  const eyeR = def.eyes.radius * px;
-  const cheekR = def.cheeks.radius * px;
+  const eyeR = (eyes?.radius ?? 0) * px;
+  const cheekR = (cheeksDef?.radius ?? 0) * px;
 
   // Ground shadow stays on the ground: static layer outside the hop/bob
   // transform, shrinking slightly as the character rises.
@@ -296,7 +322,7 @@ const Companion = forwardRef(function Companion(
       </Animated.View>
       <Animated.View style={[{ width: W, height: H }, outerStyle]}>
         <Animated.View style={[{ width: W, height: H }, innerStyle]}>
-          {def.appendages.filter((a) => a.layer === 'behind').map(renderAppendage)}
+          {appendages.filter((a) => a.layer === 'behind').map(renderAppendage)}
 
           <Svg width={W} height={H} viewBox={`0 0 ${vbW} ${vbH}`}>
             {/* 2.5D masses: all sides, then all faces */}
@@ -307,7 +333,7 @@ const Companion = forwardRef(function Companion(
               <Path key={`f${i}`} d={f.d} fill={f.fill} />
             ))}
             {/* static details */}
-            {def.details.map((d, i) =>
+            {details.map((d, i) =>
               d.type === 'circle' ? (
                 <Circle key={`d${i}`} cx={d.cx} cy={d.cy} r={d.r} fill={resolveColor(d.color)} />
               ) : (
@@ -316,10 +342,10 @@ const Companion = forwardRef(function Companion(
             )}
           </Svg>
 
-          {def.appendages.filter((a) => a.layer === 'front').map(renderAppendage)}
+          {appendages.filter((a) => a.layer === 'front').map(renderAppendage)}
 
           {/* pupils + glints (overlay Views — reliable on native AND web) */}
-          {[def.eyes.left, def.eyes.right].map(([ex, ey], i) => (
+          {eyePoints.map(([ex, ey], i) => (
             <Animated.View
               key={`eye${i}`}
               style={[
@@ -353,7 +379,7 @@ const Companion = forwardRef(function Companion(
 
           {/* cheeks */}
           <Animated.View style={[StyleSheet.absoluteFill, cheeksStyle]}>
-            {def.cheeks.points.map(([cx, cy], i) => (
+            {(cheeksDef?.points ?? []).map(([cx, cy], i) => (
               <View
                 key={`cheek${i}`}
                 style={[

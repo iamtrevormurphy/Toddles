@@ -20,11 +20,13 @@ const [VB_W, VB_H] = DEF.viewBox;
 //   - personality (blink, gaze, cheeks, arm sway, moods, one-shot
 //     reactions) lives inside Companion, reached via `mood` and the
 //     forwarded `react()` ref.
-// The body never rotates to face N/E/S/W — a standing figure would read
-// wrong sideways. Facing is cued by FacingChevron (exact), scaleX flip
-// (E/W), and Lento's pupils gazing one tile ahead via `gazeTarget`.
+// The body never rotates as a transform — a standing figure would read
+// wrong sideways. Facing is shown by swapping the rig's per-facing VIEWS
+// (`view` prop: front=S, back=N, side=E/W with scaleX flip for W), plus
+// FacingChevron (exact next-tile cue) and pupils gazing one tile ahead
+// via `gazeTarget`. GameScreen's faceDirection owns the swap timing.
 const SlothWalker = forwardRef(function SlothWalker(
-  { cx, cy, lift, squash = null, flip = null, gazeTarget = null, mood = 'idle', size = 58 },
+  { cx, cy, lift, squash = null, flip = null, view = 'front', gazeTarget = null, mood = 'idle', size = 58 },
   ref
 ) {
   const companionRef = useRef(null);
@@ -63,6 +65,7 @@ const SlothWalker = forwardRef(function SlothWalker(
           character="lento"
           size={size}
           mood={mood}
+          view={view}
           gazeTarget={gazeTarget}
           anchor={ORIGIN}
         />

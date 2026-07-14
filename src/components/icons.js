@@ -68,6 +68,30 @@ export function BroomIcon({ size = 24, color = COLORS.textDark }) {
   );
 }
 
+// "One step back" for Path-Maker's undo button: an arrow hooking back
+// left, sized to pair with BroomIcon on the controls row.
+export function UndoIcon({ size = 24, color = COLORS.textDark }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path
+        d="M8 5.5 L4 9.5 L8 13.5"
+        stroke={color}
+        strokeWidth={2.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <Path
+        d="M4.8 9.5 L14.5 9.5 A4.75 4.75 0 0 1 14.5 19 L9 19"
+        stroke={color}
+        strokeWidth={2.6}
+        strokeLinecap="round"
+        fill="none"
+      />
+    </Svg>
+  );
+}
+
 // Four-point sparkle star (replaces the old ✦ text glyph)
 export function StarIcon({ size = 20, color = COLORS.celebration }) {
   return (

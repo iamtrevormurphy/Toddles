@@ -29,9 +29,9 @@ loadModule('src/games/PathMaker/executeProgram.js', context);
 loadModule('src/games/PathMaker/levels.js', context);
 loadModule('src/games/PathMaker/trackLayout.js', context);
 
-const { TILE_TYPES, executeProgram, evaluateStep, PATHMAKER_LEVELS, computeSlotCenters, TRACK_WINDOW } =
+const { TILE_TYPES, executeProgram, evaluateStep, PATHMAKER_LEVELS, chipSlotCenters, HISTORY_WINDOW } =
   vm.runInContext(
-    '({ TILE_TYPES, executeProgram, evaluateStep, PATHMAKER_LEVELS, computeSlotCenters, TRACK_WINDOW })',
+    '({ TILE_TYPES, executeProgram, evaluateStep, PATHMAKER_LEVELS, chipSlotCenters, HISTORY_WINDOW })',
     context
   );
 
@@ -186,9 +186,9 @@ run('evaluateStep: turns always succeed and rotate the pose', () => {
   assert.strictEqual(step.to.facing, 'E');
 });
 
-run('trackLayout: rolling window is wide enough and well-formed', () => {
-  assert.ok(Number.isInteger(TRACK_WINDOW) && TRACK_WINDOW >= 3, 'window of at least 3');
-  assert.strictEqual(computeSlotCenters(TRACK_WINDOW).length, TRACK_WINDOW);
+run('trackLayout: rolling history window is wide enough and well-formed', () => {
+  assert.ok(Number.isInteger(HISTORY_WINDOW) && HISTORY_WINDOW >= 3, 'window of at least 3');
+  assert.strictEqual(chipSlotCenters(HISTORY_WINDOW).length, HISTORY_WINDOW);
 });
 
 run('snacks: unique ids, on PATH tiles the solution lands on', () => {

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import { COLORS, RADII, SHADOWS, SPACING, TYPE } from '../../constants/theme';
-import { BroomIcon, ChevronRightIcon } from '../../components/icons';
+import { BroomIcon, ChevronRightIcon, UndoIcon } from '../../components/icons';
 import BackButton from '../../components/BackButton';
 import Confetti from '../../components/Confetti';
 import PrimaryButton from '../../components/PrimaryButton';
@@ -11,11 +11,10 @@ import { findGoal, tileAt, TILE_TYPES } from './grid';
 import Board, { boardPixelSize, tileCenter } from './Board';
 import SlothWalker, { FACING_DEGREES } from './Character';
 import FacingChevron from './FacingChevron';
-import Palette, { palettePixelWidth } from './Palette';
-import Track from './Track';
-import GhostTile from './GhostTile';
+import Palette from './Palette';
+import HistoryTrail from './HistoryTrail';
 import { getTotalLevels } from './levels';
-import { computeSlotCenters, trackPixelWidth, TILE_SIZE, TRACK_WINDOW } from './trackLayout';
+import { CHIP_SIZE, TILE_SIZE } from './trackLayout';
 import DizzyStars from './DizzyStars';
 import { SnackGlyph } from './Snack';
 import { useReducedMotion } from '../../utils/motion';
@@ -35,14 +34,9 @@ import {
 // Lento's action in real time — and slow IS the sloth's whole personality.
 const STEP_DURATION = 900;
 
-// Layout constants for the track/palette area — one shared coordinate
-// origin for slot centers, palette master positions, and the ghost tile,
-// so a spawned tile can snap from one row into the other without any
-// coordinate-space translation.
-const ROW_GAP = SPACING[4];
-const TRACK_ROW_Y = TILE_SIZE / 2;
-const PALETTE_ROW_Y = TILE_SIZE + ROW_GAP + TILE_SIZE / 2;
-const OFF_TRACK_PADDING = 60;
+// Controls-area vertical budget, used by the board-scale math: history
+// trail + gap + palette row (buttons plus their extrude band).
+const CONTROLS_HEIGHT = CHIP_SIZE + 6 + SPACING[3] + TILE_SIZE + 8;
 
 // Unit direction per facing, fed to Lento's gazeTarget (with a zero
 // anchor the rig reads these as a pure direction) so his pupils look one
@@ -55,18 +49,28 @@ const FACING_VECTORS = {
   W: { x: -1, y: 0 },
 };
 
-// Live-follow: there is no Play button. Every tile the child adds makes
-// Lento walk that step IMMEDIATELY (queued if he's mid-stride); pulling
-// the last tile back out makes him moonwalk the step back. The program
-// track is a live record of where he's been, not a plan to submit.
+// Lento's body shows his facing: the Companion rig's per-facing views
+// (back of head for N, profile for E/W, face for S). The side art is
+// drawn facing East, so West is the mirrored profile — note this flips
+// the old convention where the symmetric FRONT art mirrored for E.
+// A 90° turn always crosses adjacent views (front↔side↔back), so the
+// turn choreography in faceDirection needs at most one view swap.
+const VIEW_FOR_FACING = { N: 'back', S: 'front', E: 'side', W: 'side' };
+const FLIP_FOR_FACING = { N: 1, S: 1, E: 1, W: -1 };
+
+// Live-follow: there is no Play button. Every palette button the child
+// taps makes Lento walk that step IMMEDIATELY (queued if he's
+// mid-stride); the undo button makes him moonwalk the last step back.
+// The history trail is a read-only record of where he's been, not a plan
+// to submit — chips are never touch targets.
 //
 //   phase 'ready'    — Lento idle on his tile, chevron showing his facing;
-//                      tiles can be added (tap or drag) and the last one
-//                      removed (tap or drag off).
-//   phase 'walking'  — a step (or moonwalk) is animating; more tiles can
-//                      be added (they queue), nothing can be removed.
+//                      actions can be added (palette tap) and the last one
+//                      undone (undo button).
+//   phase 'walking'  — a step (or moonwalk) is animating; more actions can
+//                      be added (they queue), nothing can be undone.
 //   phase 'theater'  — a step failed; Lento performs the failure bit and
-//                      the offending tile pops back out on its own.
+//                      the offending chip pops back out on its own.
 //   phase 'victory'  — goal reached: slow dance, confetti, success card.
 //
 // All sequencing runs on later()/setTimeout, never animation-completion
@@ -79,10 +83,10 @@ export default function GameScreen({ level, navigation, onNext }) {
     setPhase(p);
   };
 
-  // Track state has a ref twin: gesture callbacks and the runner need the
+  // Track state has a ref twin: button handlers and the runner need the
   // CURRENT program synchronously (two palette taps can land in one React
-  // frame — closure state would let the second overshoot slotCount).
-  // Every mutation goes through updateTrack so the two can't drift.
+  // frame — closure state would go stale). Every mutation goes through
+  // updateTrack so the two can't drift.
   const [track, setTrack] = useState([]); // [{id, type}]
   const trackRef = useRef([]);
   const updateTrack = (updater) => {
@@ -90,13 +94,22 @@ export default function GameScreen({ level, navigation, onNext }) {
     setTrack(trackRef.current);
   };
 
-  const [activeIndex, setActiveIndex] = useState(null); // slot being executed / at fault
+  const [activeIndex, setActiveIndex] = useState(null); // program index being executed / at fault
   const [confettiVisible, setConfettiVisible] = useState(false);
   const [showCard, setShowCard] = useState(false);
-  const [ghostType, setGhostType] = useState(null);
-  const [previewSlot, setPreviewSlot] = useState(null); // next empty slot, lit while a ghost hovers the track
   const [walkerMood, setWalkerMood] = useState('idle');
-  const [ejectingId, setEjectingId] = useState(null);
+  const [ejectingId, setEjectingId] = useState(null); // chip popping out after failure theater
+  const [removingId, setRemovingId] = useState(null); // chip shrinking away for an undo
+
+  // Which body view Lento shows (see VIEW_FOR_FACING). Ref twin for the
+  // same reason as track/phase: queued turn jobs run back-to-back and
+  // faceDirection must read the CURRENT view synchronously.
+  const [walkerView, setWalkerView] = useState(VIEW_FOR_FACING[level.start.facing]);
+  const walkerViewRef = useRef(VIEW_FOR_FACING[level.start.facing]);
+  const setWalkerViewBoth = (v) => {
+    walkerViewRef.current = v;
+    setWalkerView(v);
+  };
   const [dizzyAt, setDizzyAt] = useState(null); // {x, y, key} over Lento's head after a bonk
 
   // Snacks Lento has munched, in munching order. Ref twin for the runner
@@ -130,7 +143,7 @@ export default function GameScreen({ level, navigation, onNext }) {
   const rotation = useSharedValue(rotationTarget.current);
   const lift = useSharedValue(0);
   const squash = useSharedValue(1);
-  const flip = useSharedValue(level.start.facing === 'E' ? -1 : 1);
+  const flip = useSharedValue(FLIP_FOR_FACING[level.start.facing]);
   const chevronOpacity = useSharedValue(1);
   const gazeSV = {
     x: useSharedValue(FACING_VECTORS[level.start.facing].x),
@@ -138,10 +151,6 @@ export default function GameScreen({ level, navigation, onNext }) {
     active: useSharedValue(1),
   };
   const walkerRef = useRef(null);
-
-  const ghostSV = { x: useSharedValue(0), y: useSharedValue(0), opacity: useSharedValue(0) };
-
-  const slotCenters = computeSlotCenters(TRACK_WINDOW);
 
   // Shorten execution timings under reduced motion — never skip the
   // animation outright, per the design doc.
@@ -154,15 +163,34 @@ export default function GameScreen({ level, navigation, onNext }) {
 
   useEffect(() => () => timersRef.current.forEach(clearTimeout), []);
 
-  const isOnTrackY = (y) => y >= TRACK_ROW_Y - OFF_TRACK_PADDING && y <= TRACK_ROW_Y + OFF_TRACK_PADDING;
-
-  // Point the pupils (and the E/W body flip) at the new facing. The flip
-  // tweens through scaleX 0 — a calm little "turn in place."
-  const faceDirection = (facing) => {
+  // Turn Lento's body to the new facing. The whole turn is a scaleX tween
+  // through 0 — a calm "turn in place" — with the body VIEW swapped at the
+  // invisible midpoint when the facing crosses into different art
+  // (front↔side↔back). E↔W shares the side art, so a plain −1↔+1 tween
+  // already passes through 0 and needs no swap. Pupils lead the way.
+  //
+  // Two explicit halves, NOT one withSequence: on web, a React commit that
+  // re-renders the walker mid-animation kills an in-flight withSequence
+  // (plain withTiming and withRepeat survive) — and the view swap itself
+  // is such a commit. Parking at 0, swapping, then starting a fresh tween
+  // on the next tick keeps the second half clear of the commit.
+  const faceDirection = (facing, duration = 500) => {
     gazeSV.x.value = FACING_VECTORS[facing].x;
     gazeSV.y.value = FACING_VECTORS[facing].y;
-    if (facing === 'E') flip.value = withTiming(-1, { duration: 250 });
-    else if (facing === 'W') flip.value = withTiming(1, { duration: 250 });
+    const targetView = VIEW_FOR_FACING[facing];
+    const targetFlip = FLIP_FOR_FACING[facing];
+    if (targetView === walkerViewRef.current) {
+      flip.value = withTiming(targetFlip, { duration });
+      return;
+    }
+    const half = Math.round(duration / 2);
+    flip.value = withTiming(0, { duration: half });
+    later(() => {
+      setWalkerViewBoth(targetView);
+      later(() => {
+        flip.value = withTiming(targetFlip, { duration: half });
+      }, 32);
+    }, half);
   };
 
   // The chevron belongs to planning, not motion: visible while Lento
@@ -171,19 +199,14 @@ export default function GameScreen({ level, navigation, onNext }) {
     chevronOpacity.value = withTiming(phase === 'ready' ? 1 : 0, { duration: 250 });
   }, [phase]);
 
-  // --- Adding instructions (tap or drag from the palette) -----------------
-  // Append-only: a drop anywhere on the track row lands in the next empty
-  // slot. No insertion-index math — a 4-year-old aims at "the row," not
-  // at a slot. Adding stays enabled while Lento walks (jobs queue up);
-  // only theater and victory pause the palette.
+  // --- Adding instructions (tapping the palette) ---------------------------
+  // Live-follow: every tap executes immediately (queued if Lento is
+  // mid-stride). Adding stays enabled while he walks; only theater and
+  // victory pause the palette.
 
-  // The program is unbounded — the rolling track window means there's no
+  // The program is unbounded — the rolling history window means there's no
   // capacity to run out of, so the only gate is the phase.
   const canAdd = () => phaseRef.current === 'ready' || phaseRef.current === 'walking';
-
-  // Where the NEXT tile lands / the LAST tile sits, in window coordinates.
-  const nextSlotX = () => slotCenters[Math.min(trackRef.current.length, TRACK_WINDOW - 1)];
-  const lastSlotX = () => slotCenters[Math.min(trackRef.current.length, TRACK_WINDOW) - 1];
 
   const appendTile = (type) => {
     if (!canAdd()) return;
@@ -199,36 +222,10 @@ export default function GameScreen({ level, navigation, onNext }) {
     appendTile(type);
   };
 
-  const handleSpawnStart = (type) => {
-    setGhostType(type);
-    setPreviewSlot(null);
-  };
-
-  const handleGhostMove = ({ y }) => {
-    const idx =
-      isOnTrackY(y) && canAdd() ? Math.min(trackRef.current.length, TRACK_WINDOW - 1) : null;
-    setPreviewSlot((prev) => (prev === idx ? prev : idx));
-  };
-
-  const handleGhostEnd = ({ y }, callback) => {
-    if (isOnTrackY(y) && canAdd()) {
-      callback({ snap: { x: nextSlotX(), y: TRACK_ROW_Y } });
-      const type = ghostType;
-      later(() => {
-        setGhostType(null);
-        appendTile(type);
-      }, 120);
-    } else {
-      callback(null); // no snap → DraggableTile fades the ghost out
-      setGhostType(null);
-    }
-    setPreviewSlot(null);
-  };
-
-  // --- Removing the last instruction (tap it, or drag it off the row) -----
+  // --- Undoing the last instruction (the undo button) ----------------------
   // Only allowed while 'ready', which keeps undo and execution strictly
-  // serialized — a removed tile is always a fully-executed one. The undo
-  // job is enqueued the moment the gesture COMMITS (not when the tile's
+  // serialized — an undone action is always a fully-executed one. The undo
+  // job is enqueued the moment the button is pressed (not when the chip's
   // shrink animation ends) so a lightning-fast palette tap right after a
   // removal can never jump the queue ahead of the moonwalk.
 
@@ -237,26 +234,21 @@ export default function GameScreen({ level, navigation, onNext }) {
     processQueue();
   };
 
-  const handleTrackTap = () => {
-    // The tile shrinks itself and calls onRemoved when done; the undo
-    // starts moonwalking immediately underneath it.
+  const handleUndoPress = () => {
+    if (phaseRef.current !== 'ready' || trackRef.current.length === 0) return;
+    const last = trackRef.current[trackRef.current.length - 1];
+    setRemovingId(last.id); // the chip shrinks while Lento moonwalks under it
     commitUndo();
+    // Prune on the runner's own clock, not an animation-completion
+    // callback (the file-wide sequencing rule): the chip's 150ms shrink
+    // has read by then.
+    later(() => removeChip(last.id), 200);
   };
 
-  const handleDragEnd = (id, { y }, callback) => {
-    if (isOnTrackY(y)) {
-      callback({ snap: { x: lastSlotX() } });
-    } else {
-      callback({ remove: true });
-      commitUndo();
-      // track isn't mutated yet — handleTileRemoved does that once the
-      // tile's own shrink/fade animation finishes.
-    }
-  };
-
-  const handleTileRemoved = (id) => {
+  const removeChip = (id) => {
     updateTrack((prev) => prev.filter((t) => t.id !== id));
     setEjectingId((prev) => (prev === id ? null : prev));
+    setRemovingId((prev) => (prev === id ? null : prev));
   };
 
   const handleClear = () => {
@@ -264,6 +256,8 @@ export default function GameScreen({ level, navigation, onNext }) {
     updateTrack(() => []);
     historyRef.current = [];
     queueRef.current = [];
+    setEjectingId(null);
+    setRemovingId(null);
     setEaten([]);
     poseRef.current = { ...level.start, height: level.start.height ?? 0 };
     // Hold the runner while Lento pads back to the start tile, so a tap
@@ -363,13 +357,14 @@ export default function GameScreen({ level, navigation, onNext }) {
     later(() => beginEject(tileId), d + 900);
   };
 
-  // The tile's own pop-out animation runs via isEjecting; onRemoved prunes
-  // the track when it finishes. The runner only waits long enough for the
-  // pop to read before moving on.
+  // The chip's pop-out animation runs via its `leaving` prop; the runner
+  // prunes the track on its own clock (never an animation-completion
+  // callback) and only waits long enough for the pop to read.
   const beginEject = (tileId) => {
     playOverflowSound();
     setEjectingId(tileId);
     later(() => {
+      removeChip(tileId);
       setActiveIndex(null);
       finishJob();
     }, 340);
@@ -393,12 +388,14 @@ export default function GameScreen({ level, navigation, onNext }) {
       cx.value = withTiming(back.x, { duration: undoDuration });
       cy.value = withTiming(back.y, { duration: undoDuration });
       // A slight crouch on the slide back — reads as a careful reverse.
-      squash.value = withSequence(
-        withTiming(1.08, { duration: undoDuration * 0.3 }),
-        withTiming(1, { duration: undoDuration * 0.7 })
-      );
+      // Chained timings, not withSequence (web kill-on-commit hazard).
+      const crouch = Math.round(undoDuration * 0.3);
+      squash.value = withTiming(1.08, { duration: crouch });
+      later(() => {
+        squash.value = withTiming(1, { duration: Math.round(undoDuration * 0.7) });
+      }, crouch);
     }
-    faceDirection(last.pose.facing);
+    faceDirection(last.pose.facing, undoDuration);
     poseRef.current = last.pose;
     // Un-eat: the snack sprouts back on its tile (BoardSnack's mount
     // spring is the sprout).
@@ -415,7 +412,12 @@ export default function GameScreen({ level, navigation, onNext }) {
     setActiveIndex(null);
     // Tiles the child queued past the goal never execute — let them go.
     updateTrack((prev) => prev.slice(0, historyRef.current.length));
-    setWalkerMood('celebrating');
+    // Lento turns to face the child for his victory dance (cosmetic —
+    // poseRef keeps the real facing; the level is over anyway).
+    faceDirection('S', 500);
+    // The mood flips only AFTER the turn-to-camera fully settles (turn
+    // ends at ~530ms) — its re-render commit must not land mid-tween.
+    later(() => setWalkerMood('celebrating'), 600);
     setConfettiVisible(true);
     playCelebrationSound();
     successHaptic();
@@ -435,24 +437,29 @@ export default function GameScreen({ level, navigation, onNext }) {
     const delta = ((((target - rotationTarget.current) % 360) + 540) % 360) - 180;
     rotationTarget.current += delta;
     rotation.value = withTiming(rotationTarget.current, { duration });
-    faceDirection(pose.facing);
+    faceDirection(pose.facing, duration);
   };
 
   const animateStep = (step) => {
-    faceDirection(step.to.facing);
-
     if (step.type === 'turnLeft' || step.type === 'turnRight') {
+      // The body turn resolves at ~70% of the step so the pose gets a beat
+      // of settle before the next queued tile fires.
+      faceDirection(step.to.facing, Math.round(effectiveStepDuration * 0.7));
       rotationTarget.current += step.type === 'turnRight' ? 90 : -90;
       rotation.value = withTiming(rotationTarget.current, { duration: effectiveStepDuration });
       return;
     }
+    faceDirection(step.to.facing, 250); // forward: facing unchanged, keeps gaze honest
 
-    // A brief anticipation squash right as a movement step begins — a
-    // quick coil-then-release, not a separate schedule of its own.
-    squash.value = withSequence(
-      withTiming(1.18, { duration: effectiveStepDuration * 0.15 }),
-      withTiming(1, { duration: effectiveStepDuration * 0.35 })
-    );
+    // A brief anticipation squash right as a movement step begins. Two
+    // chained timings instead of withSequence — the step-start setState
+    // batch commits mid-coil and would kill a sequence on web (see
+    // faceDirection); the release starts after that commit has landed.
+    const coil = Math.round(effectiveStepDuration * 0.15);
+    squash.value = withTiming(1.18, { duration: coil });
+    later(() => {
+      squash.value = withTiming(1, { duration: Math.round(effectiveStepDuration * 0.35) });
+    }, coil);
     playFootstepSound(historyRef.current.length);
 
     const center = tileCenter(step.to.x, step.to.y);
@@ -471,42 +478,41 @@ export default function GameScreen({ level, navigation, onNext }) {
   // Never a punishment cue, just a physical reaction the reactions above
   // decorate.
   const animateFailedStep = (step, reach) => {
-    squash.value = withSequence(
-      withTiming(1.18, { duration: effectiveStepDuration * 0.15 }),
-      withTiming(1, { duration: effectiveStepDuration * 0.35 })
-    );
+    // Chained timings, not withSequence — same web kill-on-commit hazard
+    // as animateStep, and the theater setStates land mid-lean.
+    const coil = Math.round(effectiveStepDuration * 0.15);
+    squash.value = withTiming(1.18, { duration: coil });
+    later(() => {
+      squash.value = withTiming(1, { duration: Math.round(effectiveStepDuration * 0.35) });
+    }, coil);
     const from = tileCenter(step.from.x, step.from.y);
     const attempted = tileCenter(step.attempted.x, step.attempted.y);
     const leanX = from.x + (attempted.x - from.x) * reach;
     const leanY = from.y + (attempted.y - from.y) * reach;
-    cx.value = withSequence(
-      withTiming(leanX, { duration: effectiveStepDuration * 0.4 }),
-      withTiming(from.x, { duration: effectiveStepDuration * 0.6 })
-    );
-    cy.value = withSequence(
-      withTiming(leanY, { duration: effectiveStepDuration * 0.4 }),
-      withTiming(from.y, { duration: effectiveStepDuration * 0.6 })
-    );
+    const lean = Math.round(effectiveStepDuration * 0.4);
+    cx.value = withTiming(leanX, { duration: lean });
+    cy.value = withTiming(leanY, { duration: lean });
+    later(() => {
+      cx.value = withTiming(from.x, { duration: Math.round(effectiveStepDuration * 0.6) });
+      cy.value = withTiming(from.y, { duration: Math.round(effectiveStepDuration * 0.6) });
+    }, lean);
   };
 
   const highlightIndex = phase === 'walking' ? activeIndex : null;
   const pulseIndex = phase === 'theater' ? activeIndex : null;
 
-  const trackAreaWidth = Math.max(trackPixelWidth(TRACK_WINDOW), palettePixelWidth());
-  const trackAreaHeight = PALETTE_ROW_Y + TILE_SIZE / 2;
-
   // Tall boards on short phones: shrink the board VISUALLY (a transform on
-  // boardWrap is safe — no gesture target lives inside it; tiles and
-  // palette sit in the separate track area). The outer box reserves the
-  // scaled height so flex layout stays honest.
+  // boardWrap is safe — no gesture target lives inside it; the trail and
+  // palette sit in the separate controls column). The outer box reserves
+  // the scaled height so flex layout stays honest.
   const { height: windowHeight } = useWindowDimensions();
   const boardSize = boardPixelSize(level.board);
   const boardFullHeight = boardSize.height + 66; // island margins + band + goal halo breathing room
-  const availableForBoard = windowHeight - trackAreaHeight - 236; // chrome + controls + gaps
+  const availableForBoard = windowHeight - CONTROLS_HEIGHT - 236; // chrome + buttons + gaps
   const boardScale = Math.min(1, Math.max(0.6, availableForBoard / boardFullHeight));
 
   const paletteDisabled = phase === 'theater' || phase === 'victory';
-  const trackDisabled = phase !== 'ready';
+  const undoDisabled = phase !== 'ready' || track.length === 0;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -537,6 +543,7 @@ export default function GameScreen({ level, navigation, onNext }) {
             lift={lift}
             squash={squash}
             flip={flip}
+            view={walkerView}
             gazeTarget={gazeSV}
             mood={walkerMood}
           />
@@ -550,35 +557,28 @@ export default function GameScreen({ level, navigation, onNext }) {
         </View>
         </View>
 
-        <View style={[styles.trackArea, { width: trackAreaWidth, height: trackAreaHeight }]}>
-          <Track
-            slotCenters={slotCenters}
-            rowY={TRACK_ROW_Y}
+        <View style={styles.controlsColumn}>
+          <HistoryTrail
             track={track}
-            previewSlot={previewSlot}
-            disabled={trackDisabled}
             highlightIndex={highlightIndex}
             pulseIndex={pulseIndex}
             ejectingId={ejectingId}
-            onDragEnd={handleDragEnd}
-            onRemoved={handleTileRemoved}
-            onTap={handleTrackTap}
+            removingId={removingId}
           />
-          <Palette
-            rowY={PALETTE_ROW_Y}
-            disabled={paletteDisabled}
-            ghostSV={ghostSV}
-            onSpawnStart={handleSpawnStart}
-            onGhostMove={handleGhostMove}
-            onGhostEnd={handleGhostEnd}
-            onTap={handlePaletteTap}
-          />
-          <GhostTile type={ghostType} ghostSV={ghostSV} />
+          <Palette disabled={paletteDisabled} onTap={handlePaletteTap} />
         </View>
 
         <View style={styles.controlsRow}>
           <TouchableOpacity
-            style={[styles.broomButton, phase !== 'ready' && styles.buttonDisabled]}
+            style={[styles.roundButton, undoDisabled && styles.buttonDisabled]}
+            onPress={handleUndoPress}
+            disabled={undoDisabled}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <UndoIcon size={26} color={COLORS.textDark} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.roundButton, phase !== 'ready' && styles.buttonDisabled]}
             onPress={handleClear}
             disabled={phase !== 'ready'}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -632,15 +632,16 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: COLORS.textLight,
   },
-  trackArea: {
-    position: 'relative',
+  controlsColumn: {
+    alignItems: 'center',
+    gap: SPACING[3],
   },
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING[3],
   },
-  broomButton: {
+  roundButton: {
     width: 64,
     height: 64,
     borderRadius: 32,
