@@ -9,14 +9,17 @@ what's next. No text dialogue, no tutorials. Implementation lives in
 
 ## Cast
 
-| | Pip 🐦* | Juno 🐰* | Miso 🐱* | Lento 🦥* |
-|---|---|---|---|---|
-| Species | bird | rabbit | cat | sloth |
-| Home | Tangram companion + **app brand mark** | NumberMarble companion | Home-screen greeter (reserved for game #3) | Path-Maker **protagonist** (the child steers him — not a sidelines companion) |
-| Dominant hue | teal `#5FA8A0` | lavender `#A99BD1` | terracotta `#E2795B` | fawn `#C7A97F` |
-| Accents | cornflower `#6C8FD4` wing/tail, amber `#EDB95F` beak, terracotta crest | rose `#D98BA3` chest/inner-ear/nose, amber tail | amber inner ears, moss `#8FB26E` collar | cocoa `#8A6E58` eye-patch mask/nose/claws, cream face, amber belly |
-| Signature motion | wing flap / wing point | ear perk & droop | slow tail metronome | lazy long-arm sway + the cast's slowest blink (per-def `blink` override) |
-| Origin | the `bird` tangram puzzle IS his silhouette — the child can build Pip | descends from the `rabbit` puzzle | descends from the `cat` puzzle | born for Path-Maker: unhurried tempo *is* the game's pacing |
+| | Pip 🐦* | Juno 🐰* | Miso 🐱* | Lento 🦥* | Rumi 🦁* |
+|---|---|---|---|---|---|
+| Species | bird | rabbit | cat | sloth | lion |
+| Home | Tangram companion + **app brand mark** | NumberMarble companion | Home-screen greeter (reserved for game #3) | Path-Maker **protagonist** (the child steers him — not a sidelines companion) | Wayfinder **protagonist** (walks the dimetric causeway) |
+| Dominant hue | teal `#5FA8A0` | lavender `#A99BD1` | terracotta `#E2795B` | fawn `#C7A97F` | amber `#EDB95F` (mane) |
+| Accents | cornflower `#6C8FD4` wing/tail, amber `#EDB95F` beak, terracotta crest | rose `#D98BA3` chest/inner-ear/nose, amber tail | amber inner ears, moss `#8FB26E` collar | cocoa `#8A6E58` eye-patch mask/nose/claws, cream face, amber belly | fawn `#C7A97F` face/body, cocoa `#8A6E58` nose/ear-tips/tail-tuft, cream muzzle |
+| Signature motion | wing flap / wing point | ear perk & droop | slow tail metronome | lazy long-arm sway + the cast's slowest blink (per-def `blink` override) | proud slow tail-tip swish + brisk blink; mane "fluff" on celebrate |
+| Origin | the `bird` tangram puzzle IS his silhouette — the child can build Pip | descends from the `rabbit` puzzle | descends from the `cat` puzzle | born for Path-Maker: unhurried tempo *is* the game's pacing | born for Wayfinder: the brave walker who trusts the child to clear the way |
+
+Amber was accent-only before Rumi claimed it as a dominant hue, so the
+one-dominant-hue-per-character rule still holds cast-wide.
 
 *emoji here are documentation shorthand only — never rendered in the app.
 

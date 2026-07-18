@@ -18,6 +18,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import Tangram from './src/games/Tangram';
 import NumberMarble from './src/games/NumberMarble';
 import PathMaker from './src/games/PathMaker';
+import Wayfinder from './src/games/Wayfinder';
 
 const Stack = createNativeStackNavigator();
 
@@ -25,8 +26,8 @@ export const navigationRef = createNavigationContainerRef();
 
 // Dev hook so tooling can drive navigation (web preview verification)
 if (__DEV__ && typeof window !== 'undefined') {
-  window.__navigate = (name) => {
-    if (navigationRef.isReady()) navigationRef.navigate(name);
+  window.__navigate = (name, params) => {
+    if (navigationRef.isReady()) navigationRef.navigate(name, params);
   };
 }
 
@@ -59,6 +60,7 @@ export default function App() {
             <Stack.Screen name="TangramAnimals" component={Tangram} initialParams={{ mode: 'animals' }} />
             <Stack.Screen name="NumberMarble" component={NumberMarble} />
             <Stack.Screen name="PathMaker" component={PathMaker} />
+            <Stack.Screen name="Wayfinder" component={Wayfinder} />
             {__DEV__ && (
               <Stack.Screen
                 name="CompanionPreview"

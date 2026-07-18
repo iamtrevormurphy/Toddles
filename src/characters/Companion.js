@@ -24,8 +24,9 @@ import pip from './defs/pip';
 import juno from './defs/juno';
 import miso from './defs/miso';
 import lento from './defs/lento';
+import rumi from './defs/rumi';
 
-export const CHARACTERS = { pip, juno, miso, lento };
+export const CHARACTERS = { pip, juno, miso, lento, rumi };
 
 // The Shapefolk rig. One component renders any character def:
 // - whole-body motion (bob/hop/tilt/squash) on wrapper Animated.Views —

@@ -28,7 +28,13 @@ The player is a 4-year-old; the parent is the buyer. Calm, cozy, confident.
 - **Monument Valley — quiet magic.** Pastel gradient skies, dimensional
   geometry (things have thickness and cast long soft shadows), serene motion.
   Depth is *suggested* with 2.5D extrusion, never simulated with full 3D or
-  isometric projection.
+  isometric projection. **Sole exception: Wayfinder**
+  (`src/games/Wayfinder/`) renders in deliberate 2:1 dimetric
+  ("pseudo-isometric") projection — the one game allowed to, because its
+  whole premise is a single winding MV causeway. The projection math lives
+  ONLY in `src/games/Wayfinder/iso.js`; everything else (tokens, ink-only
+  dark, `shade()` side faces, ground-shadow recipe, motion tempos) still
+  applies there. No other game may adopt iso.
 
 ## Tokens — the source of truth
 
@@ -102,6 +108,24 @@ Pip hopping onto the piece the child just placed is the point of the
 system. On completion, windows/doorways light warm-white (`lit`) and Pip
 claims the highest open roof; his flight chains two plain withTiming
 halves via later(), never withSequence (web-kill rule).
+
+Path-Maker shares the vocabulary: the tile grid renders as an elevated
+stone causeway (deep bands, arch voids, same-type tiles merged with
+light paving joints so steps stay countable) over an island slab with
+aqueduct-pier arches, and the goal tile earns a small domed gate
+(`MONUMENT_COLORS`) when the tile above it is open sky — all paint in
+`src/games/PathMaker/Board.js`; tileCenter/boardPixelSize math is
+untouched.
+
+Wayfinder extends the vocabulary into its dimetric world (see the pillar
+carve-out above): pale stone walkway slabs (`WAYFINDER_COLORS`, with
+precomputed SE-lit / SW-shaded side faces) on tall aqueduct piers with
+arch voids, dusty rose-stone tunnel masses whose mouths are lifted-ink
+`doorway`, dashed-rim gaps (the empty-slot affordance), and a sage goal
+pad under an iso `GoalGate` shrine — all under the app's darkest sky,
+`GRADIENTS.night` (deep lavender → warm rose; still nowhere near black).
+Rumi the lion (see characters.md) walks the causeway; his facing uses
+the standard front/back/side view swap, never body rotation.
 
 ## Do / Don't
 

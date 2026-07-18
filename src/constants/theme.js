@@ -54,6 +54,9 @@ export const GRADIENTS = {
   dawn: ['#E8DFF5', '#FBE7D6'], // lavender → peach: Home, Tangram play
   dusk: ['#DDE7F0', '#F3E3E9'], // pale blue → rose: puzzle picker
   mist: ['#E3EDF1', '#EFE6F0'], // pale teal → lilac: NumberMarble
+  night: ['#9C92C4', '#E5BFB4'], // deep lavender → warm rose horizon: Wayfinder
+  //   ^ the darkest sky in the app, but still far from black — pale stone
+  //     causeways read against it the way Monument Valley's night levels do.
 };
 
 // Touch targets - minimum 64px for toddler fingers
@@ -214,6 +217,33 @@ export const MONUMENT_COLORS = {
   poolRim: shade('#7FB5B5', -0.55),
   lit: '#FFF4DC',                       // windows/doorway glow on completion
   //   ^ near-white warm gold: honey itself vanishes on amber piece faces
+};
+
+// Wayfinder colors — scoped like PATHMAKER_COLORS. Wayfinder is the one game
+// rendered in 2:1 dimetric projection (see the design skill's carve-out), so
+// every block needs TWO precomputed side shades: the sun-facing SE face and
+// the shadow-facing SW face. Paint code never calls shade() per frame.
+export const WAYFINDER_COLORS = {
+  stoneTop: '#F1E8D9',                    // walkway top diamonds (pale stone)
+  stoneSE: shade('#F1E8D9', 0.14),        // lit right side
+  stoneSW: shade('#F1E8D9', 0.3),         // shaded left side
+  pier: '#D8C7AE',                        // tall aqueduct piers under causeways
+  pierSE: shade('#D8C7AE', 0.14),
+  pierSW: shade('#D8C7AE', 0.3),
+  wallTop: '#EAD9D1',                     // tunnel-able monument mass (dusty rose-stone)
+  wallSE: shade('#EAD9D1', 0.16),
+  wallSW: shade('#EAD9D1', 0.32),
+  doorway: MONUMENT_COLORS.doorway,       // tunnel mouths — lifted ink, never black
+  goalPad: COLORS.bubbleGreen,            // sage goal diamond
+  gapRim: '#C9BBA8',                      // dashed empty-slot rim on missing decking
+  bridge: '#CDA45F',                      // timber honey deck
+  bridgeSE: shade('#CDA45F', 0.14),
+  bridgeSW: shade('#CDA45F', 0.3),
+  // Action-bar toy blocks. Move is the primary verb → THE action accent.
+  buttonMove: COLORS.bubbleOrange,        // terracotta
+  buttonBridge: '#CDA45F',                // timber honey
+  buttonStairs: '#A9C0D8',                // soft slate-blue stone
+  buttonTunnel: '#A99BD1',                // lavender (doorway carve)
 };
 
 // Extended animation timings

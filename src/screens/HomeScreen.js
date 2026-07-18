@@ -72,6 +72,42 @@ function PathMakerArt({ size }) {
   );
 }
 
+// Wayfinder card art: mini Rumi (the game's lion protagonist — amber mane
+// ring, fawn face, cocoa nose) beside dimetric stepping-stones that climb
+// to the goal-green diamond. Same brand loop: the art IS the character.
+function WayfinderArt({ size }) {
+  const diamond = (cx, cy, hw, hh) =>
+    `M ${cx} ${cy - hh} L ${cx + hw} ${cy} L ${cx} ${cy + hh} L ${cx - hw} ${cy} Z`;
+  const side = (cx, cy, hw, hh, d) =>
+    `M ${cx + hw} ${cy} L ${cx} ${cy + hh} L ${cx} ${cy + hh + d} L ${cx + hw} ${cy + d} Z`;
+  return (
+    <Svg width={size} height={size} viewBox="0 0 100 100">
+      {/* stepping causeway, climbing up-right */}
+      <Path d={side(52, 74, 15, 8, 8)} fill={shade('#F1E8D9', 0.3)} />
+      <Path d={diamond(52, 74, 15, 8)} fill="#F1E8D9" />
+      <Path d={side(70, 58, 15, 8, 8)} fill={shade('#F1E8D9', 0.3)} />
+      <Path d={diamond(70, 58, 15, 8)} fill="#F1E8D9" />
+      <Path d={side(84, 40, 13, 7, 8)} fill={shade(COLORS.bubbleGreen, 0.3)} />
+      <Path d={diamond(84, 40, 13, 7)} fill={COLORS.bubbleGreen} />
+      {/* Rumi head: mane ring, fawn face, ears, muzzle, nose, eyes */}
+      <Path
+        d="M 16 22 L 34 22 L 43 30 L 43 44 L 34 52 L 16 52 L 7 44 L 7 30 Z"
+        fill={CHARACTER_COLORS.amber}
+      />
+      <Path d="M 12 26 L 16 20 L 20 25 Z" fill={CHARACTER_COLORS.cocoa} />
+      <Path d="M 30 25 L 34 20 L 38 26 Z" fill={CHARACTER_COLORS.cocoa} />
+      <Path
+        d="M 18 27 L 32 27 L 38 32 L 38 43 L 32 48 L 18 48 L 12 43 L 12 32 Z"
+        fill={CHARACTER_COLORS.fawn}
+      />
+      <Rect x={19.5} y={39} width={11} height={7.5} rx={3} fill={CHARACTER_COLORS.white} />
+      <Path d="M 22.5 39.5 L 27.5 39.5 L 25 43 Z" fill={CHARACTER_COLORS.cocoa} />
+      <Circle cx={20} cy={35} r={1.9} fill={CHARACTER_COLORS.ink} />
+      <Circle cx={30} cy={35} r={1.9} fill={CHARACTER_COLORS.ink} />
+    </Svg>
+  );
+}
+
 function GameCard({ title, kicker, art, tint, onPress }) {
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({
@@ -147,6 +183,13 @@ export default function HomeScreen({ navigation }) {
           tint="rgba(217, 139, 163, 0.14)"
           art={<PathMakerArt size={96} />}
           onPress={() => navigation.navigate('PathMaker')}
+        />
+        <GameCard
+          title="Wayfinder"
+          kicker="Journey"
+          tint="rgba(237, 185, 95, 0.16)"
+          art={<WayfinderArt size={96} />}
+          onPress={() => navigation.navigate('Wayfinder')}
         />
       </View>
     </SafeAreaView>

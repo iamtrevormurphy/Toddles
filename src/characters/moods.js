@@ -70,6 +70,12 @@ export const REACTIONS = {
   headRub: {
     appendageSwings: { degs: [-55, -46, -55, -46, 0], duration: 210 },
   },
+  // Wayfinder wrong-tool theater (Rumi), reusable cast-wide: a puzzled
+  // little shrug — appendage lifts with a small body squash, then settles.
+  shrug: {
+    appendageSwings: { degs: [-30, -24, -30, 0], duration: 170 },
+    squash: [0.94, 1.03, 1],
+  },
 };
 
 // Blink cadence: precomputed jitter so worklets never call Math.random().
