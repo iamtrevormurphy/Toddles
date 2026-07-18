@@ -198,6 +198,24 @@ export const PATHMAKER_COLORS = {
   island: '#E4D5BD',        // warm stone slab the whole board floats on (a full step deeper than the cream tiles so the walkway pops)
 };
 
+// Monument ornaments — the tiny Monument Valley architecture that grows on
+// settled tangram pieces (flags, domes, doorways, stairs, pools, windows).
+// Scoped like TANGRAM_COLORS; ornaments are world objects, so these stay
+// pastel-plus-gilding and never introduce a new saturated hue.
+export const MONUMENT_COLORS = {
+  trim: '#F0C987',                      // gilded edges, frames, poles (honey)
+  dome: '#FFFDF9',                      // cream cupola
+  domeShade: shade('#FFFDF9', 0.22),    // cupola side per the 2.5D recipe
+  pennant: '#D98BA3',                   // rose flag
+  doorway: '#514C73',                   // lifted-ink door opening
+  stairs: '#F3EBDD',                    // pale stone treads (board stone)
+  stairsShade: shade('#F3EBDD', 0.3),
+  pool: '#7FB5B5',                      // rooftop water (muted teal)
+  poolRim: shade('#7FB5B5', -0.55),
+  lit: '#FFF4DC',                       // windows/doorway glow on completion
+  //   ^ near-white warm gold: honey itself vanishes on amber piece faces
+};
+
 // Extended animation timings
 export const ANIMATION = {
   snapDuration: 200,

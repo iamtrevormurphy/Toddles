@@ -88,6 +88,21 @@ Never use depth for depth's sake. The rules:
    extrusion light). Shadows belong to the ground — they never rotate or
    flip with the body.
 
+## Tangram monuments
+
+Settled tangram pieces grow Monument-Valley micro-architecture: summit
+flag, base doorway, domes, carved stairs, one rooftop pool, arched
+windows (colors: `MONUMENT_COLORS` in theme.js). The plan is computed
+deterministically per puzzle in `src/games/Tangram/monuments.js`
+(geometry only) and rendered by `Ornaments.js` (paint only — slot data,
+snap geometry and hitboxes stay untouched). Planner invariants: ≤1
+ornament per piece, ≤6 per puzzle, 'above' ornaments (flag/dome) only
+under open sky, and domes always leave Pip at least one standable roof —
+Pip hopping onto the piece the child just placed is the point of the
+system. On completion, windows/doorways light warm-white (`lit`) and Pip
+claims the highest open roof; his flight chains two plain withTiming
+halves via later(), never withSequence (web-kill rule).
+
 ## Do / Don't
 
 - DON'T use pure black anywhere, or saturated iOS-class primaries
