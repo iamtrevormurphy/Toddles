@@ -507,7 +507,7 @@ export default function GameScreen({ level, navigation, onNext }) {
   // the scaled height so flex layout stays honest.
   const { height: windowHeight } = useWindowDimensions();
   const boardSize = boardPixelSize(level.board);
-  const boardFullHeight = boardSize.height + 66; // island margins + band + goal halo breathing room
+  const boardFullHeight = boardSize.height + 82; // island margins (20×2) + island band (34) + breathing room
   const availableForBoard = windowHeight - CONTROLS_HEIGHT - 236; // chrome + buttons + gaps
   const boardScale = Math.min(1, Math.max(0.6, availableForBoard / boardFullHeight));
 
