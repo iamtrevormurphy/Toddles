@@ -49,19 +49,26 @@ function quad(a, b, c, d) {
   return `M ${a.x} ${a.y} L ${b.x} ${b.y} L ${c.x} ${c.y} L ${d.x} ${d.y} Z`;
 }
 
-// Where a built piece slots into the board's back-to-front column sort:
-// just after the farther-sum things it rests on, so every column nearer
-// than its near end paints over it.
+// Where a built piece slots into the board's back-to-front column sort.
 export function buildSortSum(level, ob) {
   if (ob.kind === 'gap') {
+    // A bridge is level and rests on BOTH banks' tops, so both banks must
+    // paint first: just after the nearer bank.
     const a = level.path[ob.enter - 1];
     const b = level.path[ob.enter + ob.span];
     return Math.max(a.x + a.y, b.x + b.y) + 0.4;
   }
   if (ob.kind === 'rise') {
+    // A stair flight lives entirely in the LOWER cell's half-tile, leaning
+    // against the upper ledge — so it paints just after the lower deck it
+    // rests on, and the ledge itself paints over it whenever the ledge is
+    // nearer the camera (climbing toward the viewer), exactly like real
+    // line of sight. Keying off max() here was the ledge-conflict bug: it
+    // forced the flight in front of a nearer ledge.
     const a = level.path[ob.enter - 1];
     const b = level.path[ob.enter];
-    return Math.max(a.x + a.y, b.x + b.y) + 0.4;
+    const lower = a.z <= b.z ? a : b;
+    return lower.x + lower.y + 0.4;
   }
   // Walls paint their own mass (and mouth) in their cells' columns.
   const cell = level.path[ob.enter];
@@ -150,13 +157,18 @@ export function StairShape({ level, bounds, ob }) {
   const { u, pt } = makeFrame(cellScreen(bounds, L), H.x - L.x, H.y - L.y);
   const alongX = H.x !== L.x;
 
-  // Extent tuning: the flight must stay inside its own half-tile corridor
-  // (wHalf < 0.5, far end short of the upper cell's center) so its tall
-  // parts can't spill across the screen edge of the neighboring row —
-  // combined with the painter's-sort key, that keeps line of sight honest.
-  const t0 = 0.24;
-  const dt = 0.2; // deep chunky treads — Monument Valley stairs, not a ramp
-  const wHalf = 0.36;
+  // Extent tuning: the flight lives ENTIRELY in the lower cell's half-tile
+  // (far end stops at t=0.5, the shared cell boundary) — real stairs lean
+  // against the ledge face, they don't penetrate its stone. Together with
+  // buildSortSum keying off the lower deck, a nearer ledge paints over the
+  // flight correctly. wHalf is the FULL tile width on purpose: the stepped
+  // silhouette wall then sits exactly on the row boundary, coplanar with
+  // the ledge's own side face — so even when the ledge hides the tread
+  // tops (climbing toward the viewer), the stair profile stays fully
+  // visible beside the ledge's corner, the way MV shows side-on stairs.
+  const t0 = 0.05;
+  const dt = 0.15; // treads end exactly at the cell boundary (0.05 + 3·0.15)
+  const wHalf = 0.5;
   const stepRise = Z_STEP / 3; // three treads: 10 / 20 / 30 — the top one
   //                              lands exactly at the upper deck's level
 
