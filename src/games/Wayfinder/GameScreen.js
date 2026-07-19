@@ -65,10 +65,15 @@ export default function GameScreen({ level, navigation, onNext }) {
     setPhase(p);
   };
 
-  // Engine state ref (taps must read it synchronously) + a built-list state
-  // twin so IsoBoard/BuildsLayer re-render when something is built.
+  // Engine state ref (taps must read it synchronously) + two state twins:
+  // builtList updates at the build TAP (dashes hide, mouths carve, the
+  // overlay's build-in mounts); settledList follows when the build-in
+  // animation finishes, at which point IsoBoard paints the piece statically
+  // inside its painter's-sort and the overlay unmounts — so settled builds
+  // obey line of sight like any other board geometry.
   const stateRef = useRef(initialState());
   const [builtList, setBuiltList] = useState([]);
+  const [settledList, setSettledList] = useState([]);
 
   const [walkerMood, setWalkerMood] = useState('idle');
   const [confettiVisible, setConfettiVisible] = useState(false);
@@ -220,9 +225,12 @@ export default function GameScreen({ level, navigation, onNext }) {
     else playCombineSound();
 
     stateRef.current = applyAction(stateRef.current, evaluation);
-    setBuiltList([...stateRef.current.built]); // mounts the piece → build-in animation
+    setBuiltList([...stateRef.current.built]); // mounts the overlay build-in
     later(() => walkerRef.current?.react('nod'), 250);
-    later(() => setPhaseBoth('ready'), BUILD_MS);
+    later(() => {
+      setSettledList([...stateRef.current.built]); // static paint takes over
+      setPhaseBoth('ready');
+    }, BUILD_MS);
   };
 
   // --- Wrong tool: comic theater, nothing changes ---------------------------
@@ -330,8 +338,12 @@ export default function GameScreen({ level, navigation, onNext }) {
           }}
         >
           <View style={[styles.boardWrap, { width: bounds.width, height: bounds.height, transform: [{ scale: boardScale }] }]}>
-            <IsoBoard level={level} built={builtList} />
-            <BuildsLayer level={level} bounds={bounds} built={builtList} />
+            <IsoBoard level={level} built={builtList} settled={settledList} />
+            <BuildsLayer
+              level={level}
+              bounds={bounds}
+              fresh={builtList.filter((i) => !settledList.includes(i))}
+            />
             <LionWalker
               ref={walkerRef}
               cx={cx}

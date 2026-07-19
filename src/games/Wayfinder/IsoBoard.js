@@ -15,59 +15,43 @@ import {
   sePath,
   swPath,
 } from './iso';
+import {
+  BridgeShape,
+  StairShape,
+  TunnelMouthShape,
+  buildSortSum,
+  wallMouthGeometry,
+} from './buildShapes';
 
 const HW = ISO_W / 2;
 const HH = ISO_H / 2;
 
-// In 2:1 dimetric, vertical lines stay vertical and horizontal lines run
-// at atan(1/2) ≈ 26.565° — so anything drawn onto a side face must be
-// skewed by that angle to lie IN the face plane instead of pasted over it.
-export const FACE_SKEW_DEG = 26.565;
-
-// The tunnel's one visible mouth, shared by the board painter and the
-// build-in animation so they can never disagree. The mouth lives on the
-// end face Rumi walks through on the visible side: the SE face for
-// east/west travel, the SW face for north/south — sized so Rumi (58px)
-// plausibly fits, with its sill exactly on the walking surface.
-export function wallMouthGeometry(level, bounds, ob) {
-  const span = obstacleSpan(ob);
-  const prev = level.path[ob.enter - 1];
-  const first = level.path[span[0]];
-  const axis = first.x !== prev.x ? 'x' : 'y';
-  const forward = axis === 'x' ? first.x - prev.x : first.y - prev.y;
-  const cellIndex = forward > 0 ? span[span.length - 1] : span[0];
-  const top = cellScreen(bounds, level.path[cellIndex]);
-  return {
-    cellIndex,
-    cx: axis === 'x' ? top.x + HW / 2 : top.x - HW / 2,
-    baseY: top.y + HH / 2,
-    w: HW * 0.72,
-    h: Math.min(ob.height * Z_STEP - 8, 52),
-    skew: axis === 'x' ? -FACE_SKEW_DEG : FACE_SKEW_DEG,
-  };
-}
-
-// SVG transform that skews a screen-space shape into a side-face plane,
-// pivoting about the shape's own center x so it stays put.
-export function faceSkewTransform(cx, skew) {
-  return `translate(${cx} 0) skewY(${skew}) translate(${-cx} 0)`;
-}
-
 // Dumb static painter for the dimetric causeway. Column-based painter's
-// algorithm: one render column per occupied (x, y) — walkway slab (+ pier),
+// algorithm: one render item per occupied (x, y) — walkway slab (+ pier),
 // wall prism, or decor tower — sorted by (x + y) ascending (screen back →
 // front) and painted bottom-up within a column. For axis-aligned prisms in
 // 2:1 dimetric this ordering is exact, so there is no per-polygon depth
-// math anywhere. The character NEVER joins this sort: he always renders
-// above the whole Svg, and the validator's occlusion-safety rule keeps
-// levels from putting tall geometry in front of him (see
-// scripts/validate-wayfinder.js).
+// math anywhere. SETTLED builds (bridges, stair flights) join this same
+// sort at buildSortSum — just after the banks they rest on — so nearer
+// board geometry correctly occludes them (line of sight); only the one
+// build currently animating in lives briefly in the overlay above. The
+// character NEVER joins the sort: he always renders above the whole Svg,
+// and the validator's occlusion-safety rule keeps levels from putting
+// tall geometry in front of him (see scripts/validate-wayfinder.js).
 //
 // The whole board is decoration — the game is button-only — so the entire
 // Svg is pointerEvents="none" and there is no hit-testing concern here.
-export default function IsoBoard({ level, built }) {
-  const columns = useMemo(() => buildColumns(level, built), [level, built]);
+//
+//   built:   every built obstacle index (dashes hide, mouths carve, at the
+//            moment of the build tap)
+//   settled: builds whose build-in animation has finished — painted
+//            statically here
+export default function IsoBoard({ level, built, settled }) {
   const bounds = useMemo(() => boardBounds(level), [level]);
+  const columns = useMemo(
+    () => buildColumns(level, bounds, built, settled),
+    [level, bounds, built, settled]
+  );
   // Path index → mouth geometry, for built tunnels only.
   const mouths = useMemo(() => {
     const map = new Map();
@@ -88,15 +72,23 @@ export default function IsoBoard({ level, built }) {
       viewBox={`0 0 ${bounds.width} ${bounds.height}`}
     >
       {columns.map((col) => (
-        <Column key={col.key} col={col} bounds={bounds} mouth={mouths.get(col.pathIndex) ?? null} />
+        <Column
+          key={col.key}
+          col={col}
+          bounds={bounds}
+          level={level}
+          mouth={mouths.get(col.pathIndex) ?? null}
+        />
       ))}
     </Svg>
   );
 }
 
-// Every solid thing at one (x, y), pre-sorted for painting.
-function buildColumns(level, built) {
+// Every solid thing at one (x, y) plus the settled builds, pre-sorted for
+// painting.
+function buildColumns(level, bounds, built, settled) {
   const builtSet = built instanceof Set ? built : new Set(built ?? []);
+  const settledSet = settled instanceof Set ? settled : new Set(settled ?? []);
   const lastIndex = level.path.length - 1;
 
   // Path index → wall obstacle (if any) covering it.
@@ -141,6 +133,18 @@ function buildColumns(level, built) {
     });
   }
 
+  // Settled bridges and stair flights join the sort right after the banks
+  // they rest on, so anything nearer paints over them. (Wall/tunnel paint
+  // lives in the wall's own column above.)
+  level.obstacles.forEach((ob, obIndex) => {
+    if (ob.kind === OBSTACLE_KINDS.WALL || !settledSet.has(obIndex)) return;
+    columns.push({
+      key: `b${obIndex}`,
+      sum: buildSortSum(level, ob),
+      build: ob,
+    });
+  });
+
   return columns.sort((a, b) => a.sum - b.sum);
 }
 
@@ -150,8 +154,15 @@ function isCorner(path, i) {
   return dx1 !== dx2;
 }
 
-function Column({ col, bounds, mouth }) {
+function Column({ col, bounds, level, mouth }) {
   if (col.decor) return <DecorColumn decor={col.decor} bounds={bounds} />;
+  if (col.build) {
+    return col.build.kind === OBSTACLE_KINDS.GAP ? (
+      <BridgeShape level={level} bounds={bounds} ob={col.build} />
+    ) : (
+      <StairShape level={level} bounds={bounds} ob={col.build} />
+    );
+  }
 
   const { cell } = col;
   const top = cellScreen(bounds, cell);
@@ -159,7 +170,7 @@ function Column({ col, bounds, mouth }) {
 
   if (col.isGap && !col.gapBuilt) {
     // Missing decking: the dashed empty-slot affordance floating where the
-    // slab belongs. (Once bridged, the Builds overlay owns this cell.)
+    // slab belongs. (Once bridged, the timber deck owns this cell.)
     return (
       <Path
         d={diamondPath(top.x, top.y)}
@@ -171,7 +182,7 @@ function Column({ col, bounds, mouth }) {
       />
     );
   }
-  if (col.isGap) return null; // bridged — the timber deck overlay covers it
+  if (col.isGap) return null; // bridged — the timber deck covers this cell
 
   const pierTopY = top.y + SLAB;
   const pierBottomY = deckY + PIER_DROP;
@@ -246,20 +257,7 @@ function WallMass({ col, top, mouth }) {
         strokeWidth={1}
         strokeOpacity={0.5}
       />
-      {mouth && (
-        <>
-          <Path
-            d={isoArchPath(mouth.cx, mouth.baseY, mouth.w + 9, mouth.h + 5)}
-            fill={WAYFINDER_COLORS.tunnelTrim}
-            transform={faceSkewTransform(mouth.cx, mouth.skew)}
-          />
-          <Path
-            d={isoArchPath(mouth.cx, mouth.baseY, mouth.w, mouth.h)}
-            fill={WAYFINDER_COLORS.doorway}
-            transform={faceSkewTransform(mouth.cx, mouth.skew)}
-          />
-        </>
-      )}
+      {mouth && <TunnelMouthShape mouth={mouth} />}
     </>
   );
 }
