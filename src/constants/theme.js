@@ -239,6 +239,12 @@ export const WAYFINDER_COLORS = {
   bridge: '#CDA45F',                      // timber honey deck
   bridgeSE: shade('#CDA45F', 0.14),
   bridgeSW: shade('#CDA45F', 0.3),
+  // Built stairs echo the Stairs button (the non-reader's color loop:
+  // "the blue button makes the blue steps"), same for the tunnel trim.
+  stairs: '#A9C0D8',
+  stairsSE: shade('#A9C0D8', 0.16),
+  stairsSW: shade('#A9C0D8', 0.32),
+  tunnelTrim: '#A99BD1',                  // carved arch ring around the mouth
   // Action-bar toy blocks. Move is the primary verb → THE action accent.
   buttonMove: COLORS.bubbleOrange,        // terracotta
   buttonBridge: '#CDA45F',                // timber honey

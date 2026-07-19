@@ -7,19 +7,22 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import Svg, { Path } from 'react-native-svg';
-import { COLORS, MONUMENT_COLORS, RADII, SHADOWS, WAYFINDER_COLORS } from '../../constants/theme';
-import { OBSTACLE_KINDS, obstacleSpan } from './journey';
-import { SLAB, Z_STEP, ISO_W, ISO_H, cellScreen, diamondPath, isoArchPath, sePath, swPath } from './iso';
+import Svg, { Line, Path } from 'react-native-svg';
+import { COLORS, RADII, SHADOWS, WAYFINDER_COLORS } from '../../constants/theme';
+import { OBSTACLE_KINDS } from './journey';
+import { Z_STEP, ISO_W, ISO_H, cellScreen, isoArchPath } from './iso';
+import { faceSkewTransform, wallMouthGeometry } from './IsoBoard';
 import ActionIcon from './ActionIcon';
 
 const HW = ISO_W / 2;
 const HH = ISO_H / 2;
 
 // Built pieces, one absolutely-positioned overlay per obstacle at zIndex 5:
-// above the board Svg, below Rumi (who is zIndex 10) — safe because the
-// validator's occlusion rule keeps anything tall away from his box, and
-// built pieces all live AT deck level under his feet.
+// above the board Svg, below Rumi (who is zIndex 10). Every piece here is
+// drawn as architecture that JOINS the existing geometry — a bridge rests
+// on both banks, a stair flight rises tread-by-tread from the lower deck
+// and lands flush on the upper one, a tunnel's arch grows in the wall's own
+// face plane — rather than as a shape hovering at the obstacle's cell.
 //
 // Each piece mounts when its obstacle is built, so its mount animation IS
 // the build-in. Sequencing inside uses plain withTiming/withSpring chained
@@ -41,14 +44,76 @@ export function BuildsLayer({ level, bounds, built }) {
   );
 }
 
-// Timber deck spanning the gap cells — drops in from above with one spring.
+// --- Shared dimetric strip math -------------------------------------------
+// Screen vector for one grid step (dx, dy): grid +x runs screen down-right,
+// grid +y down-left. For any straight run, `u` (along travel) and `p`
+// (perpendicular, always pointing down-screen: p.y > 0) span a local frame;
+// pt() maps (t in grid steps, w in tiles, zPx up) to screen space.
+function screenDir(dx, dy) {
+  return { x: (dx - dy) * HW, y: (dx + dy) * HH };
+}
+
+function makeFrame(origin, dx, dy) {
+  const u = screenDir(dx, dy);
+  const p = screenDir(Math.abs(dy), Math.abs(dx));
+  return {
+    u,
+    p,
+    pt: (t, w, zPx = 0) => ({
+      x: origin.x + u.x * t + p.x * w,
+      y: origin.y + u.y * t + p.y * w - zPx,
+    }),
+  };
+}
+
+function quad(a, b, c, d) {
+  return `M ${a.x} ${a.y} L ${b.x} ${b.y} L ${c.x} ${c.y} L ${d.x} ${d.y} Z`;
+}
+
+// --- Bridge ----------------------------------------------------------------
+// One continuous timber deck from bank to bank: its ends lie ON the two
+// platform tops (overlapping their stone), plank joints run across it so
+// the span stays countable, and a side skirt gives it slab thickness.
 function BridgeDeck({ level, bounds, ob }) {
+  const A = level.path[ob.enter - 1];
+  const B = level.path[ob.enter + ob.span];
+  const steps = ob.span + 1;
+  const frame = makeFrame(
+    cellScreen(bounds, A),
+    (B.x - A.x) / steps,
+    (B.y - A.y) / steps
+  );
+  const { u, pt } = frame;
+  const t0 = 0.28; // starts well inside bank A's top face…
+  const t1 = steps - 0.28; // …and ends inside bank B's — resting on both
+  const wHalf = 0.34;
+  const depth = 10;
+  // Which side faces are lit follows the board's convention: the +w edge is
+  // the SW face on east/west runs, the SE face on north/south runs.
+  const alongX = B.x !== A.x;
+  const sideFill = alongX ? WAYFINDER_COLORS.bridgeSW : WAYFINDER_COLORS.bridgeSE;
+  const endFill = alongX ? WAYFINDER_COLORS.bridgeSE : WAYFINDER_COLORS.bridgeSW;
+  const endT = u.y > 0 ? t1 : t0; // the down-screen end shows its cut face
+
+  const joints = [];
+  const jointCount = steps * 2;
+  for (let k = 1; k < jointCount; k++) {
+    const tj = t0 + ((t1 - t0) * k) / jointCount;
+    joints.push([pt(tj, -wHalf), pt(tj, wHalf)]);
+  }
+
+  // Drop-and-settle as two chained timings, not a spring: the phase→ready
+  // commit at ~750ms kills in-flight springs on web (see TunnelPop).
   const drop = useSharedValue(-44);
   const fade = useSharedValue(0);
   useEffect(() => {
-    drop.value = withSpring(0, { damping: 18, stiffness: 190 });
+    drop.value = withTiming(3, { duration: 200 });
     fade.value = withTiming(1, { duration: 140 });
+    const settle = setTimeout(() => {
+      drop.value = withTiming(0, { duration: 150 });
+    }, 210);
     return () => {
+      clearTimeout(settle);
       cancelAnimation(drop);
       cancelAnimation(fade);
     };
@@ -58,115 +123,199 @@ function BridgeDeck({ level, bounds, ob }) {
     opacity: fade.value,
   }));
 
+  const down = { x: 0, y: depth };
+  const add = (a, b) => ({ x: a.x + b.x, y: a.y + b.y });
+
   return (
     <Animated.View style={[StyleSheet.absoluteFill, style]}>
       <Svg width={bounds.width} height={bounds.height} viewBox={`0 0 ${bounds.width} ${bounds.height}`}>
-        {obstacleSpan(ob).map((i) => {
-          const p = cellScreen(bounds, level.path[i]);
-          return (
-            <React.Fragment key={i}>
-              <Path d={swPath(p.x, p.y, SLAB * 0.75)} fill={WAYFINDER_COLORS.bridgeSW} />
-              <Path d={sePath(p.x, p.y, SLAB * 0.75)} fill={WAYFINDER_COLORS.bridgeSE} />
-              <Path
-                d={diamondPath(p.x, p.y)}
-                fill={WAYFINDER_COLORS.bridge}
-                stroke={WAYFINDER_COLORS.bridgeSE}
-                strokeWidth={1.4}
-                strokeOpacity={0.7}
-              />
-            </React.Fragment>
-          );
-        })}
+        {/* side skirt along the down-screen edge */}
+        <Path
+          d={quad(pt(t0, wHalf), pt(t1, wHalf), add(pt(t1, wHalf), down), add(pt(t0, wHalf), down))}
+          fill={sideFill}
+        />
+        {/* cut face at the down-screen end */}
+        <Path
+          d={quad(
+            pt(endT, -wHalf),
+            pt(endT, wHalf),
+            add(pt(endT, wHalf), down),
+            add(pt(endT, -wHalf), down)
+          )}
+          fill={endFill}
+        />
+        {/* the deck itself */}
+        <Path
+          d={quad(pt(t0, -wHalf), pt(t0, wHalf), pt(t1, wHalf), pt(t1, -wHalf))}
+          fill={WAYFINDER_COLORS.bridge}
+        />
+        {joints.map(([a, b], i) => (
+          <Line
+            key={i}
+            x1={a.x}
+            y1={a.y}
+            x2={b.x}
+            y2={b.y}
+            stroke={WAYFINDER_COLORS.bridgeSE}
+            strokeWidth={1.4}
+            strokeOpacity={0.8}
+          />
+        ))}
       </Svg>
     </Animated.View>
   );
 }
 
-// Three treads interpolating the rise seam, cascading in bottom-to-top.
+// --- Stairs ----------------------------------------------------------------
+// A real flight: three full-width treads climbing the seam, each with a
+// riser, starting on the lower deck and landing flush with the upper one.
+// Drawn low-to-high or high-to-low so nearer treads paint over farther
+// ones, exactly like the board's column sort.
 function StairFlight({ level, bounds, ob }) {
-  const low = level.path[ob.enter - 1];
-  const high = level.path[ob.enter];
-  const a = cellScreen(bounds, low);
-  const b = cellScreen(bounds, high);
-  // Treads climb from the lower cell toward the higher one regardless of
-  // travel direction — stairs look the same walked up or down.
-  const [from, to] = low.z <= high.z ? [a, b] : [b, a];
+  const before = level.path[ob.enter - 1];
+  const after = level.path[ob.enter];
+  const L = before.z <= after.z ? before : after;
+  const H = before.z <= after.z ? after : before;
+  const frame = makeFrame(cellScreen(bounds, L), H.x - L.x, H.y - L.y);
+  const { u, pt } = frame;
+  const alongX = H.x !== L.x;
 
-  return (
-    <>
-      {[0.3, 0.5, 0.7].map((t, k) => (
-        <Tread
-          key={k}
-          delay={k * 90}
-          x={from.x + (to.x - from.x) * t}
-          y={from.y + (to.y - from.y) * t}
-          scale={0.42}
-        />
-      ))}
-    </>
-  );
-}
+  const t0 = 0.25;
+  const dt = 0.23; // deep chunky treads — Monument Valley stairs, not a ramp
+  const wHalf = 0.42;
+  const stepRise = Z_STEP / 3; // three treads: 10 / 20 / 30 — the top one
+  //                              lands exactly at the upper deck's level
 
-function Tread({ x, y, scale, delay }) {
-  const pop = useSharedValue(0);
+  const sideFill = alongX ? WAYFINDER_COLORS.stairsSW : WAYFINDER_COLORS.stairsSE;
+  const riserFill = alongX ? WAYFINDER_COLORS.stairsSE : WAYFINDER_COLORS.stairsSW;
+  // Which travel-side face of each tread the viewer sees: climbing away
+  // up-screen (u.y < 0) shows the downhill risers at tA; climbing toward
+  // the viewer shows the face under each tread's near edge at tB. Either
+  // way it's one vertical face per tread — that repetition is what makes
+  // the flight read as steps from every camera-relative direction.
+  const climbsAway = u.y < 0;
+  const order = climbsAway ? [2, 1, 0] : [0, 1, 2];
+
+  // Chained timings for the same web spring-kill reason as BridgeDeck.
+  const drop = useSharedValue(-30);
+  const fade = useSharedValue(0);
   useEffect(() => {
-    const timer = setTimeout(() => {
-      pop.value = withSpring(1, { damping: 17, stiffness: 210 });
-    }, delay);
+    drop.value = withTiming(2, { duration: 190 });
+    fade.value = withTiming(1, { duration: 160 });
+    const settle = setTimeout(() => {
+      drop.value = withTiming(0, { duration: 140 });
+    }, 200);
     return () => {
-      clearTimeout(timer);
-      cancelAnimation(pop);
+      clearTimeout(settle);
+      cancelAnimation(drop);
+      cancelAnimation(fade);
     };
   }, []);
   const style = useAnimatedStyle(() => ({
-    opacity: pop.value,
-    transform: [{ scale: 0.6 + pop.value * 0.4 }],
+    transform: [{ translateY: drop.value }],
+    opacity: fade.value,
   }));
-  const hw = HW * scale;
-  const hh = HH * scale;
-  const depth = 9;
+
+  // The load-bearing readability cue: the flight's down-screen side is ONE
+  // solid wall whose top edge is the classic stepped staircase profile
+  // (same silhouette as the Stairs button icon). It grounds the flight on
+  // the lower deck and reads as stairs from every travel direction — the
+  // per-tread faces alone go mushy at ~8px per step.
+  const base = -3; // wall foot laps just below the lower deck's surface
+  const profile = [];
+  profile.push(pt(t0, wHalf, base));
+  for (let k = 0; k < 3; k++) {
+    const tA = t0 + k * dt;
+    const zTop = (k + 1) * stepRise;
+    profile.push(pt(tA, wHalf, zTop)); // riser: straight up…
+    profile.push(pt(tA + dt, wHalf, zTop)); // …then the tread run
+  }
+  profile.push(pt(t0 + 3 * dt, wHalf, base));
+  const wallPath = `M ${profile.map((p2) => `${p2.x} ${p2.y}`).join(' L ')} Z`;
+
+  const treads = order.map((k) => {
+    const tA = t0 + k * dt;
+    const tB = tA + dt;
+    const zTop = (k + 1) * stepRise;
+    const faceT = climbsAway ? tA : tB; // the tread's viewer-side edge
+    const faceDepth = stepRise + 3; // laps the tread below → stacked stone
+    return (
+      <React.Fragment key={k}>
+        <Path
+          d={quad(
+            pt(faceT, -wHalf, zTop),
+            pt(faceT, wHalf, zTop),
+            pt(faceT, wHalf, zTop - faceDepth),
+            pt(faceT, -wHalf, zTop - faceDepth)
+          )}
+          fill={riserFill}
+        />
+        <Path
+          d={quad(pt(tA, -wHalf, zTop), pt(tA, wHalf, zTop), pt(tB, wHalf, zTop), pt(tB, -wHalf, zTop))}
+          fill={WAYFINDER_COLORS.stairs}
+          stroke={WAYFINDER_COLORS.stairsSE}
+          strokeWidth={1.2}
+          strokeOpacity={0.75}
+        />
+      </React.Fragment>
+    );
+  });
+
   return (
-    <Animated.View style={[styles.tread, { left: x - hw, top: y - hh - depth }, style]}>
-      <Svg width={hw * 2} height={hh * 2 + depth * 2} viewBox={`${-hw} ${-hh - depth} ${hw * 2} ${hh * 2 + depth * 2}`}>
-        <Path d={swPath(0, 0, depth)} fill={MONUMENT_COLORS.stairsShade} />
-        <Path d={sePath(0, 0, depth)} fill={MONUMENT_COLORS.stairsShade} />
-        <Path d={diamondPath(0, 0)} fill={MONUMENT_COLORS.stairs} />
+    <Animated.View style={[StyleSheet.absoluteFill, style]}>
+      <Svg width={bounds.width} height={bounds.height} viewBox={`0 0 ${bounds.width} ${bounds.height}`}>
+        <Path d={wallPath} fill={sideFill} />
+        {treads}
       </Svg>
     </Animated.View>
   );
 }
 
-// The carved-arch reveal: a doorway-colored arch grows up from the wall
-// base at the entry cell, then the identical static mouth painted by
-// IsoBoard (same built state) simply remains beneath it.
+// --- Tunnel ----------------------------------------------------------------
+// The carved-arch reveal: the trim ring and dark mouth grow up out of the
+// walking surface IN the wall's face plane (same geometry the board paints
+// once built — wallMouthGeometry keeps the two identical).
 function TunnelPop({ level, bounds, ob }) {
-  const span = obstacleSpan(ob);
-  const cell = level.path[span[0]];
-  const prev = level.path[ob.enter - 1];
-  const axis = cell.x !== prev.x ? 'x' : 'y';
-  const p = cellScreen(bounds, cell);
-  const mouthX = axis === 'x' ? p.x + HW / 2 : p.x - HW / 2;
-  const mouthBottom = p.y + HH;
-  const h = Math.min(ob.height * Z_STEP - 6, 44);
+  const m = wallMouthGeometry(level, bounds, ob);
 
+  // Plain timings, chained on setTimeout: GameScreen's phase→ready commit
+  // lands at ~750ms, and on web a commit kills an in-flight withSpring the
+  // same way it kills withSequence (observed here: the arch froze at
+  // scaleY 0.63) — withTiming survives, and both halves finish before the
+  // commit anyway.
   const grow = useSharedValue(0);
   useEffect(() => {
-    grow.value = withSpring(1, { damping: 19, stiffness: 170 });
-    return () => cancelAnimation(grow);
+    grow.value = withTiming(1.05, { duration: 220 });
+    const settle = setTimeout(() => {
+      grow.value = withTiming(1, { duration: 140 });
+    }, 230);
+    return () => {
+      clearTimeout(settle);
+      cancelAnimation(grow);
+    };
   }, []);
-  // Transform-origin at the arch base via translate sandwich.
+  // Transform-origin at the arch sill via translate sandwich.
   const style = useAnimatedStyle(() => ({
     transform: [
-      { translateY: mouthBottom },
+      { translateY: m.baseY },
       { scaleY: grow.value },
-      { translateY: -mouthBottom },
+      { translateY: -m.baseY },
     ],
   }));
 
   return (
     <Animated.View style={[StyleSheet.absoluteFill, style]}>
       <Svg width={bounds.width} height={bounds.height} viewBox={`0 0 ${bounds.width} ${bounds.height}`}>
-        <Path d={isoArchPath(mouthX, mouthBottom, HW * 0.62, h)} fill={WAYFINDER_COLORS.doorway} />
+        <Path
+          d={isoArchPath(m.cx, m.baseY, m.w + 9, m.h + 5)}
+          fill={WAYFINDER_COLORS.tunnelTrim}
+          transform={faceSkewTransform(m.cx, m.skew)}
+        />
+        <Path
+          d={isoArchPath(m.cx, m.baseY, m.w, m.h)}
+          fill={WAYFINDER_COLORS.doorway}
+          transform={faceSkewTransform(m.cx, m.skew)}
+        />
       </Svg>
     </Animated.View>
   );
@@ -257,9 +406,6 @@ export function ToolGhost({ tool, x, y, mode = 'mismatch' }) {
 const styles = StyleSheet.create({
   layer: {
     zIndex: 5,
-  },
-  tread: {
-    position: 'absolute',
   },
   ghost: {
     position: 'absolute',

@@ -19,6 +19,40 @@ import {
 const HW = ISO_W / 2;
 const HH = ISO_H / 2;
 
+// In 2:1 dimetric, vertical lines stay vertical and horizontal lines run
+// at atan(1/2) ≈ 26.565° — so anything drawn onto a side face must be
+// skewed by that angle to lie IN the face plane instead of pasted over it.
+export const FACE_SKEW_DEG = 26.565;
+
+// The tunnel's one visible mouth, shared by the board painter and the
+// build-in animation so they can never disagree. The mouth lives on the
+// end face Rumi walks through on the visible side: the SE face for
+// east/west travel, the SW face for north/south — sized so Rumi (58px)
+// plausibly fits, with its sill exactly on the walking surface.
+export function wallMouthGeometry(level, bounds, ob) {
+  const span = obstacleSpan(ob);
+  const prev = level.path[ob.enter - 1];
+  const first = level.path[span[0]];
+  const axis = first.x !== prev.x ? 'x' : 'y';
+  const forward = axis === 'x' ? first.x - prev.x : first.y - prev.y;
+  const cellIndex = forward > 0 ? span[span.length - 1] : span[0];
+  const top = cellScreen(bounds, level.path[cellIndex]);
+  return {
+    cellIndex,
+    cx: axis === 'x' ? top.x + HW / 2 : top.x - HW / 2,
+    baseY: top.y + HH / 2,
+    w: HW * 0.72,
+    h: Math.min(ob.height * Z_STEP - 8, 52),
+    skew: axis === 'x' ? -FACE_SKEW_DEG : FACE_SKEW_DEG,
+  };
+}
+
+// SVG transform that skews a screen-space shape into a side-face plane,
+// pivoting about the shape's own center x so it stays put.
+export function faceSkewTransform(cx, skew) {
+  return `translate(${cx} 0) skewY(${skew}) translate(${-cx} 0)`;
+}
+
 // Dumb static painter for the dimetric causeway. Column-based painter's
 // algorithm: one render column per occupied (x, y) — walkway slab (+ pier),
 // wall prism, or decor tower — sorted by (x + y) ascending (screen back →
@@ -34,6 +68,17 @@ const HH = ISO_H / 2;
 export default function IsoBoard({ level, built }) {
   const columns = useMemo(() => buildColumns(level, built), [level, built]);
   const bounds = useMemo(() => boardBounds(level), [level]);
+  // Path index → mouth geometry, for built tunnels only.
+  const mouths = useMemo(() => {
+    const map = new Map();
+    const builtSet = built instanceof Set ? built : new Set(built ?? []);
+    level.obstacles.forEach((ob, obIndex) => {
+      if (ob.kind !== OBSTACLE_KINDS.WALL || !builtSet.has(obIndex)) return;
+      const m = wallMouthGeometry(level, bounds, ob);
+      map.set(m.cellIndex, m);
+    });
+    return map;
+  }, [level, bounds, built]);
 
   return (
     <Svg
@@ -43,7 +88,7 @@ export default function IsoBoard({ level, built }) {
       viewBox={`0 0 ${bounds.width} ${bounds.height}`}
     >
       {columns.map((col) => (
-        <Column key={col.key} col={col} bounds={bounds} level={level} />
+        <Column key={col.key} col={col} bounds={bounds} mouth={mouths.get(col.pathIndex) ?? null} />
       ))}
     </Svg>
   );
@@ -76,10 +121,6 @@ function buildColumns(level, built) {
       isGap: Boolean(gap),
       gapBuilt: gap ? builtSet.has(gap.obIndex) : false,
       wall: wall ? wall.ob : null,
-      wallBuilt: wall ? builtSet.has(wall.obIndex) : false,
-      // Travel axis through this cell, for tunnel-mouth placement.
-      axis:
-        i > 0 && level.path[i].x !== level.path[i - 1].x ? 'x' : 'y',
       // Deterministic pier scatter: ends of the walkway, corners, and
       // every third straight cell — enough support to read as aqueduct,
       // enough air for the arches between piers to breathe.
@@ -109,7 +150,7 @@ function isCorner(path, i) {
   return dx1 !== dx2;
 }
 
-function Column({ col, bounds, level }) {
+function Column({ col, bounds, mouth }) {
   if (col.decor) return <DecorColumn decor={col.decor} bounds={bounds} />;
 
   const { cell } = col;
@@ -180,15 +221,18 @@ function Column({ col, bounds, level }) {
         strokeOpacity={0.5}
       />
 
-      {col.wall && <WallMass col={col} top={top} />}
+      {col.wall && <WallMass col={col} top={top} mouth={mouth} />}
       {col.isGoal && <GoalGate cx={top.x} cy={top.y} />}
     </>
   );
 }
 
 // The tunnel-able monument mass sitting on the deck of this cell. Drawn
-// after the slab so it stacks on top; the tunnel mouth appears once built.
-function WallMass({ col, top }) {
+// after the slab so it stacks on top; once built, the one walk-through
+// face carries the carved mouth — a lavender trim ring around the dark
+// opening, both skewed into the face plane so the arch reads as carved
+// INTO the stone, its sill flush with the walking surface.
+function WallMass({ col, top, mouth }) {
   const h = col.wall.height * Z_STEP;
   const wallTopY = top.y - h;
   return (
@@ -202,18 +246,19 @@ function WallMass({ col, top }) {
         strokeWidth={1}
         strokeOpacity={0.5}
       />
-      {col.wallBuilt && (
-        // The carved mouth, centered on the face the walkway pierces:
-        // the SE face for E/W travel, the SW face for N/S travel.
-        <Path
-          d={isoArchPath(
-            col.axis === 'x' ? top.x + HW / 2 : top.x - HW / 2,
-            top.y + HH,
-            HW * 0.62,
-            Math.min(h - 6, 44)
-          )}
-          fill={WAYFINDER_COLORS.doorway}
-        />
+      {mouth && (
+        <>
+          <Path
+            d={isoArchPath(mouth.cx, mouth.baseY, mouth.w + 9, mouth.h + 5)}
+            fill={WAYFINDER_COLORS.tunnelTrim}
+            transform={faceSkewTransform(mouth.cx, mouth.skew)}
+          />
+          <Path
+            d={isoArchPath(mouth.cx, mouth.baseY, mouth.w, mouth.h)}
+            fill={WAYFINDER_COLORS.doorway}
+            transform={faceSkewTransform(mouth.cx, mouth.skew)}
+          />
+        </>
       )}
     </>
   );
