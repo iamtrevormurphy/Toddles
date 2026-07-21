@@ -127,6 +127,28 @@ pad under an iso `GoalGate` shrine — all under the app's darkest sky,
 Rumi the lion (see characters.md) walks the causeway; his facing uses
 the standard front/back/side view swap, never body rotation.
 
+## Completion & navigation chrome (shared)
+
+- **Success is a bottom bar, never a dimming modal.** Every game signals
+  "level complete" with the shared `src/components/SuccessBar.js`: a rounded
+  warm-white card (`SHADOWS.floating`) that springs up along the bottom of
+  the screen — no full-screen scrim. The point is that the character
+  (Pip/Juno/Lento/Rumi) keeps celebrating on the board, fully lit and
+  unobscured; a dim overlay covering the dance was the anti-pattern this
+  replaced. It reveals ~1400ms after the win so the dance + confetti read
+  first, carries the win line + the single terracotta `PrimaryButton`
+  "Next" (plus an optional text-only secondary like Tangram's "More
+  pictures"), and the game hides its now-moot bottom controls (palette /
+  action bar / tray) while it's up. Do not reintroduce per-game
+  `completeOverlay`/`completeCard` modals.
+- **Level select is a full-screen tile grid.** PathMaker and Wayfinder make
+  the top-right "Level X/Y" indicator a tappable pill that opens the shared
+  `src/components/LevelSelectOverlay.js` — a dimmed overlay of big numbered
+  tiles (≥`TOUCH.minTargetSize`), current level filled with the game's
+  accent. Every level is unlocked (the app has no progress persistence).
+  Selecting calls back to the game `index.js` `setLevelId`, and the keyed
+  `GameScreen` remounts fresh.
+
 ## Do / Don't
 
 - DON'T use pure black anywhere, or saturated iOS-class primaries

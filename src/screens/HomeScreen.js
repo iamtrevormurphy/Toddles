@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, SafeAreaView, ScrollView } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -138,17 +138,18 @@ export default function HomeScreen({ navigation }) {
     <SafeAreaView style={styles.container}>
       <GradientBackground name="dawn" />
 
-      <View style={styles.header}>
-        <View style={styles.titleRow}>
-          <Text style={styles.title}>Toddles</Text>
-          <View style={styles.greeter}>
-            <Companion character="miso" size={72} mood="idle" />
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <View style={styles.header}>
+          <View style={styles.titleRow}>
+            <Text style={styles.title}>Toddles</Text>
+            <View style={styles.greeter}>
+              <Companion character="miso" size={72} mood="idle" />
+            </View>
           </View>
+          <Text style={styles.subtitle}>Tap to play!</Text>
         </View>
-        <Text style={styles.subtitle}>Tap to play!</Text>
-      </View>
 
-      <View style={styles.gamesGrid}>
+        <View style={styles.gamesGrid}>
         <GameCard
           title="Numbers"
           kicker="Tangram"
@@ -191,7 +192,8 @@ export default function HomeScreen({ navigation }) {
           art={<WayfinderArt size={96} />}
           onPress={() => navigation.navigate('Wayfinder')}
         />
-      </View>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -199,6 +201,9 @@ export default function HomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scroll: {
+    paddingBottom: 40,
   },
   header: {
     alignItems: 'center',

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Animated, {
   Easing,
   useSharedValue,
@@ -27,8 +27,7 @@ import AmbientClouds from '../../components/AmbientClouds';
 import BackButton from '../../components/BackButton';
 import Confetti from '../../components/Confetti';
 import GradientBackground from '../../components/GradientBackground';
-import PrimaryButton from '../../components/PrimaryButton';
-import { ChevronRightIcon } from '../../components/icons';
+import SuccessBar from '../../components/SuccessBar';
 import { Companion } from '../../characters';
 import Board from './Board';
 import MonumentLayer from './Ornaments';
@@ -73,6 +72,17 @@ export default function GameScreen({ puzzle, onBack, onNext, onPickMore, renderM
   const later = (fn, ms) => {
     timersRef.current.push(setTimeout(fn, ms));
   };
+
+  // On completion the tray is empty (all pieces are on the board), so fade
+  // its panel + home-ghosts out — otherwise the faint shelf sits behind the
+  // bottom success bar. Gentle single settle, per the depth/motion policy.
+  const trayFade = useSharedValue(1);
+  useEffect(() => {
+    trayFade.value = withTiming(complete ? 0 : 1, { duration: 300 });
+  }, [complete]);
+  const trayFadeStyle = useAnimatedStyle(() => ({ opacity: trayFade.value }));
+  // Ghosts rest at 0.12; fold the fade in so completion doesn't flash them opaque.
+  const ghostFadeStyle = useAnimatedStyle(() => ({ opacity: 0.12 * trayFade.value }));
 
   const pieceCount = puzzle.slots.length;
   const trayRows = pieceCount > 4 ? 2 : 1;
@@ -368,7 +378,7 @@ export default function GameScreen({ puzzle, onBack, onNext, onPickMore, renderM
         />
       </Animated.View>
 
-      <View style={[styles.tray, { top: trayTop, height: trayH }]} pointerEvents="none" />
+      <Animated.View style={[styles.tray, { top: trayTop, height: trayH }, trayFadeStyle]} pointerEvents="none" />
 
       {/* Faint ghosts marking each piece's tray home */}
       {pieces.map((piece) => {
@@ -376,20 +386,22 @@ export default function GameScreen({ puzzle, onBack, onNext, onPickMore, renderM
         const w = shape.w * layout.scale * TRAY_SCALE;
         const h = shape.h * layout.scale * TRAY_SCALE;
         return (
-          <View
+          <Animated.View
             key={`ghost-${piece.id}`}
             pointerEvents="none"
-            style={{
-              position: 'absolute',
-              left: piece.homeX - w / 2,
-              top: piece.homeY - h / 2,
-              opacity: 0.12,
-            }}
+            style={[
+              {
+                position: 'absolute',
+                left: piece.homeX - w / 2,
+                top: piece.homeY - h / 2,
+              },
+              ghostFadeStyle,
+            ]}
           >
             <Svg width={w} height={h} viewBox={`0 0 ${shape.w} ${shape.h}`}>
               <Path d={getShapePath(piece.shape)} fill={shape.color} />
             </Svg>
-          </View>
+          </Animated.View>
         );
       })}
 
@@ -422,18 +434,14 @@ export default function GameScreen({ puzzle, onBack, onNext, onPickMore, renderM
         />
       )}
 
-      {showOverlay && (
-        <View style={styles.overlay}>
-          <View style={styles.overlayCard}>
-            <PuzzlePreview puzzle={puzzle} size={120} extruded />
-            <Text style={styles.overlayTitle}>{puzzle.name}!</Text>
-            <PrimaryButton label="Next" icon={<ChevronRightIcon size={26} />} onPress={onNext} />
-            <TouchableOpacity style={styles.moreButton} onPress={onPickMore}>
-              <Text style={styles.moreButtonText}>More pictures</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
+      <SuccessBar
+        visible={showOverlay}
+        message={`${puzzle.name}!`}
+        onNext={onNext}
+        secondaryLabel="More pictures"
+        onSecondary={onPickMore}
+        accessory={<PuzzlePreview puzzle={puzzle} size={96} extruded />}
+      />
     </View>
   );
 }
@@ -511,37 +519,5 @@ const styles = StyleSheet.create({
     right: 8,
     borderRadius: RADII.lg,
     backgroundColor: 'rgba(62, 58, 94, 0.06)',
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(62, 58, 94, 0.35)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  overlayCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: RADII.xl,
-    paddingVertical: 28,
-    paddingHorizontal: 36,
-    alignItems: 'center',
-    gap: 16,
-    ...SHADOWS.floating,
-  },
-  overlayTitle: {
-    ...TYPE.title,
-    fontSize: 32,
-    color: COLORS.textDark,
-  },
-  moreButton: {
-    height: 56,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  moreButtonText: {
-    ...TYPE.body,
-    fontSize: 19,
-    color: COLORS.textLight,
   },
 });

@@ -29,6 +29,8 @@ export default function Wayfinder({ navigation, route }) {
         key={level.id}
         level={level}
         onNext={() => setLevelId(getNextLevel(level.id).id)}
+        onPickLevel={(id) => setLevelId(id)}
+        levelIds={WAYFINDER_LEVELS.map((l) => l.id)}
         navigation={navigation}
       />
     </View>

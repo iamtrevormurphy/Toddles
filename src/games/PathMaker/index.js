@@ -38,6 +38,8 @@ export default function PathMaker({ navigation }) {
         key={level.id}
         level={level}
         onNext={() => setLevelId(getNextLevel(level.id).id)}
+        onPickLevel={(id) => setLevelId(id)}
+        levelIds={PATHMAKER_LEVELS.map((l) => l.id)}
         navigation={navigation}
       />
     </View>

@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
-import { ANIMATION, COLORS, MARBLE_COLORS, MARBLE_PALETTE, RADII, SHADOWS, TYPE } from '../../constants/theme';
+import { ANIMATION, COLORS, MARBLE_COLORS, MARBLE_PALETTE, SHADOWS, TYPE } from '../../constants/theme';
 import {
   playSplitSound,
   playCombineSound,
@@ -20,8 +20,8 @@ import { distance } from '../../utils/collision';
 import BackButton from '../../components/BackButton';
 import Confetti from '../../components/Confetti';
 import GradientBackground from '../../components/GradientBackground';
-import PrimaryButton from '../../components/PrimaryButton';
-import { ChevronRightIcon, RefreshIcon } from '../../components/icons';
+import SuccessBar from '../../components/SuccessBar';
+import { RefreshIcon } from '../../components/icons';
 import Character from './Character';
 import Marble, { MARBLE_SIZE } from './Marble';
 import MarbleArea, { PLAY_AREA, getMarblePositions, getSplitPositions, resolveOverlaps } from './MarbleArea';
@@ -45,6 +45,9 @@ export default function NumberMarble({ navigation }) {
   const [isDancing, setIsDancing] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [isLevelComplete, setIsLevelComplete] = useState(false);
+  // The success bar reveals ~1400ms after the win so Juno's dance + the
+  // confetti read first — matching PathMaker/Wayfinder/Tangram.
+  const [showSuccess, setShowSuccess] = useState(false);
   const [isTargetHighlighted, setIsTargetHighlighted] = useState(false);
   const [draggedMarbleId, setDraggedMarbleId] = useState(null);
   const [slotWobbleKey, setSlotWobbleKey] = useState(0);
@@ -108,6 +111,7 @@ export default function NumberMarble({ navigation }) {
     setMarbles(resolveOverlaps(newMarbles));
     setIsDancing(false);
     setIsLevelComplete(false);
+    setShowSuccess(false);
     setShowConfetti(false);
   };
 
@@ -219,6 +223,7 @@ export default function NumberMarble({ navigation }) {
       playCelebrationSound();
       successHaptic();
       later(() => setMarbles((prev) => prev.filter((m) => !m.inSlot)), 500);
+      later(() => setShowSuccess(true), 1400);
       return;
     }
 
@@ -454,21 +459,13 @@ export default function NumberMarble({ navigation }) {
         onComplete={handleConfettiComplete}
       />
 
-      {/* Level complete overlay */}
-      {isLevelComplete && (
-        <View style={styles.completeOverlay}>
-          <View style={styles.completeCard}>
-            <Text style={styles.completeText}>
-              {currentLevel.target}!
-            </Text>
-            <PrimaryButton
-              label="Next"
-              icon={<ChevronRightIcon size={26} />}
-              onPress={handleNextLevel}
-            />
-          </View>
-        </View>
-      )}
+      {/* Level complete — shared bottom success bar (Juno dances above) */}
+      <SuccessBar
+        visible={showSuccess}
+        message={`${currentLevel.target}!`}
+        messageColor={MARBLE_COLORS.marble}
+        onNext={handleNextLevel}
+      />
 
       {/* Retry button (when stuck) */}
       {!isLevelComplete && marbles.length > 0 && (
@@ -518,27 +515,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: COLORS.textLight,
     textAlign: 'center',
-  },
-  completeOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(62, 58, 94, 0.35)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 200,
-  },
-  completeCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: RADII.xl,
-    paddingVertical: 32,
-    paddingHorizontal: 40,
-    alignItems: 'center',
-    gap: 20,
-    ...SHADOWS.floating,
-  },
-  completeText: {
-    ...TYPE.display,
-    fontSize: 46,
-    color: MARBLE_COLORS.marble,
   },
   retryButton: {
     position: 'absolute',

@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
-import { COLORS, RADII, SHADOWS, SPACING, TYPE } from '../../constants/theme';
-import { BroomIcon, ChevronRightIcon, UndoIcon } from '../../components/icons';
+import { COLORS, SHADOWS, SPACING, TYPE } from '../../constants/theme';
+import { BroomIcon, UndoIcon } from '../../components/icons';
 import BackButton from '../../components/BackButton';
 import Confetti from '../../components/Confetti';
-import PrimaryButton from '../../components/PrimaryButton';
+import SuccessBar from '../../components/SuccessBar';
+import LevelSelectOverlay from '../../components/LevelSelectOverlay';
 import { evaluateStep } from './executeProgram';
 import { findGoal, tileAt, TILE_TYPES } from './grid';
 import Board, { boardPixelSize, tileCenter } from './Board';
@@ -75,8 +76,9 @@ const FLIP_FOR_FACING = { N: 1, S: 1, E: 1, W: -1 };
 //
 // All sequencing runs on later()/setTimeout, never animation-completion
 // callbacks, so game state always advances even if rendering stalls.
-export default function GameScreen({ level, navigation, onNext }) {
+export default function GameScreen({ level, navigation, onNext, onPickLevel, levelIds }) {
   const [phase, setPhase] = useState('ready');
+  const [showLevelSelect, setShowLevelSelect] = useState(false);
   const phaseRef = useRef('ready');
   const setPhaseBoth = (p) => {
     phaseRef.current = p;
@@ -518,11 +520,16 @@ export default function GameScreen({ level, navigation, onNext }) {
     <SafeAreaView style={styles.container}>
       <BackButton onPress={() => navigation.goBack()} />
 
-      <View style={styles.levelIndicator}>
+      <TouchableOpacity
+        style={styles.levelIndicator}
+        onPress={() => setShowLevelSelect(true)}
+        hitSlop={12}
+        activeOpacity={0.7}
+      >
         <Text style={styles.levelText}>
           Level {level.id}/{getTotalLevels()}
         </Text>
-      </View>
+      </TouchableOpacity>
 
       <View style={styles.center}>
         <View
@@ -557,53 +564,68 @@ export default function GameScreen({ level, navigation, onNext }) {
         </View>
         </View>
 
-        <View style={styles.controlsColumn}>
-          <HistoryTrail
-            track={track}
-            highlightIndex={highlightIndex}
-            pulseIndex={pulseIndex}
-            ejectingId={ejectingId}
-            removingId={removingId}
-          />
-          <Palette disabled={paletteDisabled} onTap={handlePaletteTap} />
-        </View>
+        {phase !== 'victory' && (
+          <>
+            <View style={styles.controlsColumn}>
+              <HistoryTrail
+                track={track}
+                highlightIndex={highlightIndex}
+                pulseIndex={pulseIndex}
+                ejectingId={ejectingId}
+                removingId={removingId}
+              />
+              <Palette disabled={paletteDisabled} onTap={handlePaletteTap} />
+            </View>
 
-        <View style={styles.controlsRow}>
-          <TouchableOpacity
-            style={[styles.roundButton, undoDisabled && styles.buttonDisabled]}
-            onPress={handleUndoPress}
-            disabled={undoDisabled}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <UndoIcon size={26} color={COLORS.textDark} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.roundButton, phase !== 'ready' && styles.buttonDisabled]}
-            onPress={handleClear}
-            disabled={phase !== 'ready'}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <BroomIcon size={26} color={COLORS.textDark} />
-          </TouchableOpacity>
-        </View>
+            <View style={styles.controlsRow}>
+              <TouchableOpacity
+                style={[styles.roundButton, undoDisabled && styles.buttonDisabled]}
+                onPress={handleUndoPress}
+                disabled={undoDisabled}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <UndoIcon size={26} color={COLORS.textDark} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.roundButton, phase !== 'ready' && styles.buttonDisabled]}
+                onPress={handleClear}
+                disabled={phase !== 'ready'}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <BroomIcon size={26} color={COLORS.textDark} />
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
       </View>
 
-      {showCard && (
-        <View style={styles.completeOverlay}>
-          <View style={styles.completeCard}>
-            <Text style={styles.completeText}>Goal reached!</Text>
-            {eatenIds.length > 0 && (
-              <View style={styles.snackRow}>
-                {eatenIds.map((id) => {
-                  const snack = levelSnacks.find((s) => s.id === id);
-                  return snack ? <SnackGlyph key={id} kind={snack.kind} size={28} /> : null;
-                })}
-              </View>
-            )}
-            <PrimaryButton label="Next" icon={<ChevronRightIcon size={26} />} onPress={onNext} />
-          </View>
-        </View>
-      )}
+      <SuccessBar
+        visible={showCard}
+        message="Goal reached!"
+        onNext={onNext}
+        accessory={
+          eatenIds.length > 0 ? (
+            <View style={styles.snackRow}>
+              {eatenIds.map((id) => {
+                const snack = levelSnacks.find((s) => s.id === id);
+                return snack ? <SnackGlyph key={id} kind={snack.kind} size={28} /> : null;
+              })}
+            </View>
+          ) : null
+        }
+      />
+
+      <LevelSelectOverlay
+        visible={showLevelSelect}
+        levelIds={levelIds}
+        currentId={level.id}
+        accentColor={COLORS.bubbleOrange}
+        onClose={() => setShowLevelSelect(false)}
+        onSelect={(id) => {
+          setShowLevelSelect(false);
+          onPickLevel?.(id);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -623,14 +645,18 @@ const styles = StyleSheet.create({
   },
   levelIndicator: {
     position: 'absolute',
-    top: 55,
+    top: 50,
     right: 20,
     zIndex: 100,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 253, 249, 0.6)',
   },
   levelText: {
     ...TYPE.body,
     fontSize: 18,
-    color: COLORS.textLight,
+    color: COLORS.textDark,
   },
   controlsColumn: {
     alignItems: 'center',
@@ -652,27 +678,6 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
-  },
-  completeOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(62, 58, 94, 0.35)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 200,
-  },
-  completeCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: RADII.xl,
-    paddingVertical: 32,
-    paddingHorizontal: 40,
-    alignItems: 'center',
-    gap: 20,
-    ...SHADOWS.floating,
-  },
-  completeText: {
-    ...TYPE.display,
-    fontSize: 40,
-    color: COLORS.success,
   },
   snackRow: {
     flexDirection: 'row',
